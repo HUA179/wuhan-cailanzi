@@ -4,409 +4,697 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>武汉菜篮子</title>
-<!-- TailwindCSS CDN -->
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- Vue3 Global Build -->
 <script src="https://cdn.jsdelivr.net/npm/vue@3.4.31/dist/vue.global.prod.js"></script>
-<!-- ECharts CDN -->
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <style>
-  [v-cloak] { display: none; }
-  body { background: #e5e7eb; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
-  /* 隐藏横向滚动条但保留滚动 */
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  /* 抽屉动画 */
-  .drawer-enter-active, .drawer-leave-active { transition: transform .3s ease, opacity .3s ease; }
-  .drawer-enter-from, .drawer-leave-to { transform: translateY(100%); }
-  .fade-enter-active, .fade-leave-active { transition: opacity .3s ease; }
-  .fade-enter-from, .fade-leave-to { opacity: 0; }
+  [v-cloak] { display:none; }
+  body { background:#eef1f5; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         -webkit-tap-highlight-color:transparent; }
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+  .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
+
+  /* 抽屉 / 遮罩动画 */
+  .sheet-enter-active,.sheet-leave-active { transition:transform .28s cubic-bezier(.32,.72,0,1); }
+  .sheet-enter-from,.sheet-leave-to { transform:translateY(100%); }
+  .fade-enter-active,.fade-leave-active { transition:opacity .25s ease; }
+  .fade-enter-from,.fade-leave-to { opacity:0; }
+
+  /* 骨架屏微光 */
+  @keyframes shimmer { 100% { transform:translateX(100%); } }
+  .skeleton { position:relative; overflow:hidden; background:#e8ecf1; }
+  .skeleton::after {
+    content:''; position:absolute; inset:0; transform:translateX(-100%);
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.8),transparent);
+    animation:shimmer 1.4s infinite;
+  }
+  .card-press { transition:transform .12s ease, box-shadow .2s ease; }
+  .card-press:active { transform:scale(.985); }
 </style>
 </head>
 <body>
 
 <div id="app" v-cloak class="max-w-md mx-auto bg-gray-50 min-h-screen shadow-xl relative flex flex-col">
 
-  <!-- ===== 顶部导航区 ===== -->
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-100 px-4 pt-4 pb-2">
+  <!-- ===== 顶部（随页面滚动）===== -->
+  <div class="bg-white px-4 pt-4 pb-3">
     <div class="flex items-center justify-between mb-3">
-      <h1 class="text-xl font-bold text-gray-800">🥬 武汉菜篮子</h1>
-      <span class="text-xs"
-        :class="dataSource === 'real' ? 'text-green-500' : 'text-gray-400'">
-        {{ dataSource === 'real' ? '● 官方真实数据' : '○ 内置演示数据' }}
-      </span>
+      <div class="flex items-center gap-2">
+        <h1 class="text-xl font-bold text-gray-800">🥬 武汉菜篮子</h1>
+        <span class="text-[10px] px-1.5 py-0.5 rounded-full border"
+          :class="dataSource === 'real'
+            ? 'text-green-600 border-green-300 bg-green-50'
+            : 'text-amber-600 border-amber-300 bg-amber-50'">
+          {{ dataSource === 'real' ? '官方真实' : '演示数据' }}
+        </span>
+      </div>
+      <button @click="openRank" class="text-xs px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-600 font-medium active:bg-gray-200">
+        📊 涨跌榜
+      </button>
     </div>
 
-    <!-- 双轨切换 Tab -->
+    <!-- 双轨切换 -->
     <div class="flex bg-gray-100 rounded-full p-1 mb-3">
-      <button @click="mode = 'market'"
-        :class="mode === 'market' ? 'bg-white shadow text-green-600 font-semibold' : 'text-gray-500'"
+      <button @click="mode='market'"
+        :class="mode==='market' ? 'bg-white shadow text-green-600 font-semibold' : 'text-gray-500'"
         class="flex-1 py-1.5 rounded-full text-sm transition-all">📍 市场均价</button>
-      <button @click="mode = 'supermarket'"
-        :class="mode === 'supermarket' ? 'bg-white shadow text-blue-600 font-semibold' : 'text-gray-500'"
+      <button @click="mode='supermarket'"
+        :class="mode==='supermarket' ? 'bg-white shadow text-blue-600 font-semibold' : 'text-gray-500'"
         class="flex-1 py-1.5 rounded-full text-sm transition-all">🛒 商超价格</button>
     </div>
 
-    <!-- 搜索框（支持中文 + 拼音首字母） -->
-    <div class="relative mb-3">
+    <!-- 搜索 -->
+    <div class="relative">
       <input v-model.trim="searchQuery" type="text" placeholder="搜索菜品，支持拼音首字母（如 xhs）"
-        class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-green-300">
+        class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-8 text-sm outline-none focus:ring-2 focus:ring-green-300">
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+      <button v-if="searchQuery" @click="searchQuery=''"
+        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">✕</button>
     </div>
+  </div>
 
-    <!-- 分类横向滑动 -->
-    <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-      <button v-for="cat in categories" :key="cat" @click="activeCategory = cat"
-        :class="activeCategory === cat
-          ? (mode === 'market' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white')
-          : 'bg-white text-gray-600 border border-gray-200'"
-        class="whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0">
+  <!-- ===== 吸顶分类栏 ===== -->
+  <div class="sticky top-0 z-30 transition-all duration-200"
+    :class="scrolled ? 'bg-white/95 backdrop-blur shadow-md' : 'bg-white/95 backdrop-blur'">
+    <div class="px-4 pt-2 pb-1.5 flex gap-2 overflow-x-auto no-scrollbar">
+      <button v-for="cat in categories" :key="cat" @click="activeCategory=cat"
+        :class="activeCategory===cat
+          ? (mode==='market' ? 'bg-green-500 text-white border-green-500' : 'bg-blue-500 text-white border-blue-500')
+          : 'bg-white text-gray-600 border-gray-200'"
+        class="whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium border transition-colors shrink-0">
         {{ cat }}
       </button>
     </div>
-  </header>
+    <div class="px-4 pb-2 flex items-center gap-3 text-[11px]">
+      <span class="text-gray-400 shrink-0">排序</span>
+      <button v-for="s in sorts" :key="s.key" @click="sortMode=s.key"
+        :class="sortMode===s.key ? (mode==='market'?'text-green-600 font-semibold':'text-blue-600 font-semibold') : 'text-gray-400'">
+        {{ s.label }}
+      </button>
+      <span class="ml-auto text-gray-300">{{ filteredItems.length }} 项</span>
+    </div>
+  </div>
 
-  <!-- ===== 菜品列表 ===== -->
+  <!-- ===== 列表 ===== -->
   <main class="flex-1 px-4 py-3 space-y-3">
-    <div v-if="filteredItems.length === 0" class="text-center text-gray-400 text-sm py-16">
+
+    <!-- 骨架屏 -->
+    <template v-if="loading">
+      <div v-for="n in 3" :key="'sk'+n" class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="skeleton h-4 w-20 rounded"></div>
+            <div class="skeleton h-3.5 w-10 rounded-full"></div>
+          </div>
+          <div class="skeleton h-4 w-4 rounded"></div>
+        </div>
+        <div class="flex items-end justify-between mt-2.5">
+          <div>
+            <div class="skeleton h-7 w-24 rounded"></div>
+            <div class="skeleton h-3 w-32 rounded mt-2"></div>
+          </div>
+          <div class="skeleton h-8 w-24 rounded"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-3">
+          <div><div class="skeleton h-3 w-20 rounded"></div><div class="skeleton h-1.5 w-full rounded-full mt-2"></div></div>
+          <div><div class="skeleton h-3 w-20 rounded"></div><div class="skeleton h-1.5 w-full rounded-full mt-2"></div></div>
+        </div>
+      </div>
+    </template>
+
+    <div v-else-if="filteredItems.length === 0" class="text-center text-gray-400 text-sm py-16">
       没有找到相关菜品 🥲
     </div>
 
-    <div v-for="item in filteredItems" :key="item.id"
-      @click="openDetail(item)"
-      class="bg-white rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-transform cursor-pointer flex items-center gap-3">
+    <template v-else>
+      <div v-for="item in filteredItems" :key="item.id"
+        @click="onCardClick(item)"
+        @touchstart="pressStart(item)" @touchend="pressEnd" @touchmove="pressEnd" @touchcancel="pressEnd"
+        @mousedown="pressStart(item)" @mouseup="pressEnd" @mouseleave="pressEnd"
+        class="bg-white rounded-2xl p-3.5 shadow-sm card-press cursor-pointer select-none"
+        :class="isComparing(item) ? 'ring-2 ring-amber-400' : 'ring-1 ring-black/[0.03]'">
 
-      <!-- 品类图标块 -->
-      <div :class="mode === 'market' ? 'bg-green-50' : 'bg-blue-50'"
-        class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0">
-        {{ categoryIcon(item.category) }}
-      </div>
-
-      <!-- 中间信息 -->
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-          <span class="font-semibold text-gray-800 truncate">{{ item.name }}</span>
-          <!-- 市场模式：近一年价格分位标签 -->
-          <span v-if="mode === 'market'"
-            :class="positionTag(item).cls"
-            class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0">
-            {{ positionTag(item).text }}
-          </span>
-          <!-- 商超模式：商超名 -->
-          <span v-else class="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium shrink-0">
-            {{ item.storeName }}
-          </span>
+        <!-- 行1：名称 + 标签 + 收藏 -->
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+            <span class="font-semibold text-[15px] text-gray-800 truncate">{{ item.name }}</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 shrink-0">{{ item.category }}</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0"
+              :class="dataSource==='real' ? 'text-green-600 border-green-200 bg-green-50/70' : 'text-amber-600 border-amber-200 bg-amber-50/70'">
+              {{ dataSource==='real' ? '官方真实' : '演示' }}
+            </span>
+            <span v-if="isComparing(item)" class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">对比中</span>
+          </div>
+          <button @click.stop="toggleFav(item)" class="text-lg leading-none shrink-0 -mt-0.5">
+            <span :class="isFav(item) ? 'text-amber-400' : 'text-gray-300'">{{ isFav(item) ? '★' : '☆' }}</span>
+          </button>
         </div>
-        <div class="text-xs text-gray-400 mt-0.5">{{ item.category }} · {{ item.unit }}</div>
 
-        <!-- 商超模式：差价标签 -->
-        <div v-if="mode === 'supermarket'" class="mt-1">
+        <!-- 行2：价格 + 涨跌角标 + 迷你走势 -->
+        <div class="flex items-end justify-between mt-1">
+          <div class="min-w-0">
+            <div class="flex items-baseline gap-1 flex-wrap">
+              <span class="text-[26px] leading-none font-bold text-gray-900 tracking-tight">
+                <span class="text-sm font-semibold">¥</span>{{ displayPrice(item).toFixed(2) }}
+              </span>
+              <span class="text-[10px] text-gray-400">元/500g</span>
+              <span class="ml-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-md"
+                :class="change(item) > 0 ? 'bg-red-50 text-red-500'
+                      : change(item) < 0 ? 'bg-green-50 text-green-600'
+                      : 'bg-gray-100 text-gray-400'">
+                {{ change(item) > 0 ? '↑' : change(item) < 0 ? '↓' : '—' }}{{ Math.abs(change(item)).toFixed(2) }}%
+              </span>
+            </div>
+            <div class="text-[11px] text-gray-400 mt-1.5">
+              周环比
+              <span :class="change(item) > 0 ? 'text-red-500 font-medium' : change(item) < 0 ? 'text-green-600 font-medium' : 'text-gray-500'">
+                {{ change(item) > 0 ? '+' : '' }}{{ change(item).toFixed(2) }}%
+              </span>
+              · 涨跌
+              <span :class="delta(item) > 0 ? 'text-red-500' : delta(item) < 0 ? 'text-green-600' : 'text-gray-500'">
+                {{ delta(item) > 0 ? '+' : '' }}{{ delta(item).toFixed(2) }}元
+              </span>
+            </div>
+          </div>
+
+          <!-- 迷你 sparkline（13 周） -->
+          <svg viewBox="0 0 100 34" class="w-[86px] h-[34px] shrink-0"
+            :class="change(item) > 0 ? 'text-red-400' : change(item) < 0 ? 'text-green-500' : 'text-gray-300'">
+            <polygon :points="sparkArea(item)" fill="currentColor" opacity="0.12"></polygon>
+            <polyline :points="sparkLine(item)" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          </svg>
+        </div>
+
+        <!-- 行3：双百分位 -->
+        <div class="grid grid-cols-2 gap-3 mt-2.5">
+          <div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-[10px] text-gray-400">近3个月位置</span>
+              <span class="text-[11px] font-semibold" :class="posColor(pct3(item))">{{ pct3(item) }}%</span>
+            </div>
+            <div class="relative h-1.5 rounded-full bg-gray-100 mt-1.5">
+              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct3(item))"
+                :style="{ width: pct3(item) + '%' }"></div>
+              <span class="absolute -top-[3px] w-3 h-3 rounded-full bg-white border-2 border-gray-300 shadow-sm"
+                :style="{ left: 'calc(' + pct3(item) + '% - 6px)' }"></span>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-[10px] text-gray-400">近1年位置</span>
+              <span class="text-[11px] font-semibold" :class="posColor(pct1y(item))">{{ pct1y(item) }}%</span>
+            </div>
+            <div class="relative h-1.5 rounded-full bg-gray-100 mt-1.5">
+              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct1y(item))"
+                :style="{ width: pct1y(item) + '%' }"></div>
+              <span class="absolute -top-[3px] w-3 h-3 rounded-full bg-white border-2 border-gray-300 shadow-sm"
+                :style="{ left: 'calc(' + pct1y(item) + '% - 6px)' }"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 行4：商超信息 -->
+        <div v-if="mode==='supermarket'" class="mt-2.5 pt-2 border-t border-gray-50 flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">{{ item.storeName }}</span>
           <span v-if="priceDiff(item) > 0" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-medium">
             贵 ¥{{ priceDiff(item).toFixed(2) }}
           </span>
           <span v-else-if="priceDiff(item) < 0" class="text-[11px] px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">
             省 ¥{{ Math.abs(priceDiff(item)).toFixed(2) }}
           </span>
-          <span v-else class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">持平</span>
-          <span class="text-[11px] text-gray-400 ml-1.5">市场价 ¥{{ item.currentPrice.toFixed(2) }}</span>
+          <span v-else class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">持平</span>
+          <span class="text-[10px] text-gray-400">市场价 ¥{{ item.currentPrice.toFixed(2) }}</span>
         </div>
       </div>
+    </template>
 
-      <!-- 价格 + 收藏 -->
-      <div class="text-right shrink-0">
-        <div :class="mode === 'market' ? 'text-green-600' : 'text-blue-600'" class="font-bold text-lg leading-tight">
-          <span class="text-xs font-normal">¥</span>{{ displayPrice(item).toFixed(2) }}
+    <p v-if="!loading" class="text-center text-[10px] text-gray-400 pt-1 pb-2 leading-relaxed">
+      位置 = 当前价在 13 周 / 52 周区间的百分位（越高越贵）<br>
+      长按卡片可加入对比（选 2 个），点击查看走势图
+    </p>
+  </main>
+
+  <footer class="text-center text-[10px] text-gray-300 py-3">武汉菜篮子 · 数据来自政府公开公示</footer>
+
+  <!-- 对比浮动条 -->
+  <transition name="fade">
+    <div v-if="compareList.length" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md">
+      <div class="bg-gray-900/90 backdrop-blur text-white rounded-2xl px-4 py-2.5 flex items-center gap-3 shadow-xl">
+        <span class="text-xs shrink-0">已选 {{ compareList.length }}/2</span>
+        <span class="text-[11px] text-gray-300 truncate flex-1">{{ compareNames }}</span>
+        <button @click="clearCompare" class="text-[11px] px-2 py-1 rounded-full bg-white/15 shrink-0">清除</button>
+      </div>
+    </div>
+  </transition>
+
+  <!-- ===== 涨跌榜 ===== -->
+  <transition name="fade"><div v-if="rankVisible" @click="rankVisible=false" class="fixed inset-0 bg-black/40 z-40"></div></transition>
+  <transition name="sheet">
+    <div v-if="rankVisible" class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-50 max-h-[78vh] flex flex-col">
+      <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3"></div>
+      <div class="px-5 pt-3 pb-2">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-bold text-gray-800">今日涨跌榜</h3>
+          <button @click="rankVisible=false" class="text-gray-400 text-lg leading-none">✕</button>
         </div>
-        <button @click.stop="toggleFav(item)"
-          class="text-xl mt-0.5 leading-none"
-          :title="isFav(item) ? '取消收藏' : '收藏'">
-          {{ isFav(item) ? '⭐' : '☆' }}
+        <div class="flex gap-2 mb-3">
+          <button @click="rankTab='up'"
+            :class="rankTab==='up' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500'"
+            class="flex-1 py-1.5 rounded-full text-xs font-medium">涨幅 TOP10</button>
+          <button @click="rankTab='down'"
+            :class="rankTab==='down' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'"
+            class="flex-1 py-1.5 rounded-full text-xs font-medium">跌幅 TOP10</button>
+        </div>
+        <div class="flex gap-3 text-[11px] text-gray-400">
+          <span>涨 <b class="text-red-500">{{ stats.up }}</b></span>
+          <span>跌 <b class="text-green-600">{{ stats.down }}</b></span>
+          <span>平 <b class="text-gray-500">{{ stats.flat }}</b></span>
+        </div>
+      </div>
+      <div class="overflow-y-auto px-5 pb-8">
+        <div v-for="(it, i) in rankList" :key="'rk'+it.id"
+          @click="rankVisible=false; openDetail([it])"
+          class="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
+          <span class="w-5 text-center text-xs font-bold"
+            :class="i < 3 ? (rankTab==='up' ? 'text-red-500' : 'text-green-600') : 'text-gray-300'">{{ i + 1 }}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm font-medium text-gray-800 truncate">{{ it.name }}</span>
+              <span class="text-[10px] text-gray-400">{{ it.category }}</span>
+            </div>
+            <div class="text-[10px] text-gray-400 mt-0.5">¥{{ it.currentPrice.toFixed(2) }} / 500g</div>
+          </div>
+          <span class="text-sm font-bold" :class="change(it) > 0 ? 'text-red-500' : 'text-green-600'">
+            {{ change(it) > 0 ? '+' : '' }}{{ change(it).toFixed(2) }}%
+          </span>
+        </div>
+      </div>
+    </div>
+  </transition>
+
+  <!-- ===== 详情抽屉（图表）===== -->
+  <transition name="fade"><div v-if="drawerVisible" @click="closeDrawer" class="fixed inset-0 bg-black/40 z-40"></div></transition>
+  <transition name="sheet">
+    <div v-if="drawerVisible" class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-50 flex flex-col max-h-[88vh]">
+      <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 shrink-0"></div>
+      <div class="px-5 pt-3 pb-2 overflow-y-auto">
+        <div class="flex items-start justify-between">
+          <div class="min-w-0">
+            <div class="font-bold text-lg text-gray-800 truncate">
+              {{ activeItems.map(i => i.name).join('  vs  ') }}
+            </div>
+            <div class="text-[11px] text-gray-400 mt-0.5">
+              {{ activeItems.length > 1 ? '长按选中 · 双品对比' : (activeItems[0] ? activeItems[0].category + ' · ' + activeItems[0].unit : '') }}
+            </div>
+          </div>
+          <button @click="closeDrawer" class="text-gray-400 text-lg leading-none shrink-0">✕</button>
+        </div>
+
+        <!-- 价格块（单品种） -->
+        <div v-if="activeItems.length === 1 && activeItems[0]" class="flex items-end gap-3 mt-2.5">
+          <div>
+            <span class="text-3xl font-bold text-gray-900 tracking-tight">
+              <span class="text-base font-semibold">¥</span>{{ displayPrice(activeItems[0]).toFixed(2) }}
+            </span>
+            <span class="text-[10px] text-gray-400 ml-1">元/500g</span>
+          </div>
+          <div class="pb-1 text-[11px] text-gray-400">
+            周环比
+            <span :class="change(activeItems[0]) > 0 ? 'text-red-500 font-semibold' : 'text-green-600 font-semibold'">
+              {{ change(activeItems[0]) > 0 ? '+' : '' }}{{ change(activeItems[0]).toFixed(2) }}%
+            </span>
+          </div>
+        </div>
+
+        <!-- 双百分位（单品种） -->
+        <div v-if="activeItems.length === 1 && activeItems[0]" class="grid grid-cols-2 gap-2.5 mt-3">
+          <div class="bg-gray-50 rounded-xl p-2.5">
+            <div class="text-[10px] text-gray-400">近3个月位置（13周）</div>
+            <div class="text-lg font-bold" :class="posColor(pct3(activeItems[0]))">{{ pct3(activeItems[0]) }}%</div>
+            <div class="relative h-1.5 rounded-full bg-gray-200 mt-1">
+              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct3(activeItems[0]))"
+                :style="{ width: pct3(activeItems[0]) + '%' }"></div>
+            </div>
+            <div class="text-[9px] text-gray-400 mt-1.5 truncate">{{ rangeText(activeItems[0], 13) }}</div>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-2.5">
+            <div class="text-[10px] text-gray-400">近1年位置（52周）</div>
+            <div class="text-lg font-bold" :class="posColor(pct1y(activeItems[0]))">{{ pct1y(activeItems[0]) }}%</div>
+            <div class="relative h-1.5 rounded-full bg-gray-200 mt-1">
+              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct1y(activeItems[0]))"
+                :style="{ width: pct1y(activeItems[0]) + '%' }"></div>
+            </div>
+            <div class="text-[9px] text-gray-400 mt-1.5 truncate">{{ rangeText(activeItems[0], 52) }}</div>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-gray-500 mt-3 mb-1 font-medium">
+          近 52 周价格走势 · 双指可缩放，按住拖动查看数值
+        </div>
+        <div ref="chartEl" class="w-full h-60"></div>
+        <div class="text-[10px] text-gray-400 leading-relaxed mt-1">
+          红点 = 区间最高价，绿点 = 区间最低价；竖向虚线为当前查看位置。
+        </div>
+      </div>
+      <div class="px-5 pt-2 pb-6 shrink-0">
+        <button @click="closeDrawer" class="w-full py-2.5 rounded-full bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200">
+          关闭
         </button>
       </div>
     </div>
-  </main>
-
-  <footer class="text-center text-[11px] text-gray-400 py-4">
-    武汉菜篮子 · 价格仅供参考
-  </footer>
-
-  <!-- ===== 详情抽屉 ===== -->
-  <transition name="fade">
-    <div v-if="drawerVisible" @click="closeDrawer" class="fixed inset-0 bg-black/40 z-30"></div>
   </transition>
 
-  <transition name="drawer">
-    <div v-if="drawerVisible && activeItem"
-      class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-40 p-5 pb-8 shadow-2xl">
-      <!-- 抽屉把手 -->
-      <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4"></div>
-
-      <div class="flex items-center justify-between mb-1">
-        <div>
-          <div class="font-bold text-lg text-gray-800">{{ activeItem.name }}</div>
-          <div class="text-xs text-gray-400">{{ activeItem.category }} · {{ activeItem.unit }}</div>
-        </div>
-        <div class="text-right">
-          <div :class="mode === 'market' ? 'text-green-600' : 'text-blue-600'" class="font-bold text-2xl">
-            ¥{{ displayPrice(activeItem).toFixed(2) }}
-          </div>
-          <div class="text-[11px] text-gray-400">当前{{ mode === 'market' ? '市场均价' : '商超价' }}</div>
-        </div>
-      </div>
-
-      <div class="text-xs text-gray-500 mb-2 mt-3 font-medium">近 52 周价格走势（元/{{ activeItem.unit }}）</div>
-      <!-- ECharts 容器 -->
-      <div ref="chartEl" class="w-full h-64"></div>
-
-      <button @click="closeDrawer"
-        class="w-full mt-4 py-2.5 rounded-full bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200">
-        关闭
-      </button>
+  <!-- Toast -->
+  <transition name="fade">
+    <div v-if="toast" class="fixed top-1/3 left-1/2 -translate-x-1/2 z-[60] bg-gray-900/88 text-white text-xs px-4 py-2 rounded-full shadow-lg whitespace-nowrap">
+      {{ toast }}
     </div>
   </transition>
 </div>
 
 <script>
 /* =========================================================
- * 模拟数据 —— 后续替换为真实接口时，把 MOCK_ITEMS 换成
- * fetch('你的接口').then(r => r.json()) 返回的同结构数组即可。
- * 字段说明：
- *   id              唯一 ID
- *   name            菜品中文名
- *   pinyin          拼音首字母（用于模糊搜索）
- *   category        分类：蔬菜 / 肉禽蛋 / 水产 / 米面粮油
- *   unit            计价单位
- *   currentPrice    市场均价（元）
- *   supermarketPrice 商超价（元）
- *   storeName       商超名（盒马 / 小象 等）
- *   yearPosition    近一年价格分位（0-100，越高越贵）
- *   history         近 52 周价格数组（数组最后一条 = 本周）
+ * 兜底模拟数据（data.json 读取失败时使用，结构与 data.json 一致）
+ * 字段：id / name / pinyin / category / unit / currentPrice
+ *      supermarketPrice / storeName / yearPosition / history[52]
  * ========================================================= */
 const MOCK_ITEMS = [
-  {
-    id: 1, name: '西红柿', pinyin: 'xhs', category: '蔬菜', unit: '500g',
-    currentPrice: 4.50, supermarketPrice: 5.80, storeName: '盒马',
-    yearPosition: 78,
-    history: [
-      3.10, 3.15, 3.22, 3.30, 3.45, 3.60, 3.80, 3.95, 4.10, 4.05, 3.90, 3.70, 3.50,
-      3.30, 3.05, 2.85, 2.70, 2.60, 2.55, 2.50, 2.45, 2.50, 2.60, 2.75, 2.90, 3.05,
-      3.15, 3.20, 3.10, 3.00, 2.95, 3.00, 3.10, 3.25, 3.40, 3.55, 3.70, 3.85, 3.95,
-      4.00, 3.95, 3.90, 3.95, 4.05, 4.15, 4.25, 4.35, 4.40, 4.45, 4.48, 4.50, 4.50
-    ]
-  },
-  {
-    id: 2, name: '鸡蛋', pinyin: 'jd', category: '肉禽蛋', unit: '500g',
-    currentPrice: 4.20, supermarketPrice: 3.99, storeName: '小象超市',
-    yearPosition: 22,
-    history: [
-      4.80, 4.85, 4.90, 4.95, 5.00, 5.05, 5.10, 5.05, 4.95, 4.85, 4.75, 4.65, 4.55,
-      4.50, 4.45, 4.40, 4.35, 4.30, 4.35, 4.40, 4.45, 4.50, 4.55, 4.60, 4.55, 4.50,
-      4.45, 4.40, 4.35, 4.30, 4.25, 4.20, 4.15, 4.10, 4.15, 4.20, 4.25, 4.30, 4.25,
-      4.20, 4.18, 4.15, 4.12, 4.10, 4.15, 4.18, 4.22, 4.25, 4.22, 4.20, 4.20, 4.20
-    ]
-  },
-  {
-    id: 3, name: '草鱼', pinyin: 'cy', category: '水产', unit: '500g',
-    currentPrice: 9.80, supermarketPrice: 12.50, storeName: '盒马',
-    yearPosition: 55,
-    history: [
-      8.50, 8.60, 8.75, 8.90, 9.05, 9.20, 9.35, 9.50, 9.60, 9.55, 9.45, 9.35, 9.25,
-      9.15, 9.05, 8.95, 8.85, 8.80, 8.75, 8.85, 8.95, 9.10, 9.25, 9.40, 9.55, 9.65,
-      9.75, 9.85, 9.95, 10.05, 9.95, 9.80, 9.65, 9.50, 9.45, 9.40, 9.50, 9.60, 9.70,
-      9.75, 9.80, 9.85, 9.90, 9.85, 9.75, 9.70, 9.65, 9.70, 9.75, 9.80, 9.78, 9.80
-    ]
-  },
-  {
-    id: 4, name: '大白菜', pinyin: 'dbc', category: '蔬菜', unit: '500g',
-    currentPrice: 1.80, supermarketPrice: 1.50, storeName: '小象超市',
-    yearPosition: 15,
-    history: [
-      2.60, 2.55, 2.50, 2.45, 2.40, 2.30, 2.20, 2.10, 2.00, 1.95, 1.90, 1.85, 1.80,
-      1.75, 1.70, 1.65, 1.60, 1.58, 1.55, 1.60, 1.65, 1.70, 1.75, 1.80, 1.85, 1.90,
-      1.95, 2.00, 2.05, 2.10, 2.05, 1.98, 1.92, 1.86, 1.80, 1.75, 1.72, 1.70, 1.68,
-      1.66, 1.65, 1.68, 1.70, 1.72, 1.75, 1.78, 1.80, 1.82, 1.80, 1.79, 1.80, 1.80
-    ]
-  },
-  {
-    id: 5, name: '东北大米', pinyin: 'dbdm', category: '米面粮油', unit: '500g',
-    currentPrice: 3.20, supermarketPrice: 3.59, storeName: '盒马',
-    yearPosition: 63,
-    history: [
-      2.85, 2.86, 2.88, 2.90, 2.92, 2.95, 2.98, 3.00, 3.02, 3.05, 3.08, 3.10, 3.08,
-      3.05, 3.03, 3.00, 3.02, 3.05, 3.08, 3.10, 3.12, 3.15, 3.13, 3.10, 3.08, 3.10,
-      3.12, 3.15, 3.18, 3.20, 3.22, 3.20, 3.18, 3.15, 3.18, 3.20, 3.22, 3.25, 3.22,
-      3.20, 3.18, 3.20, 3.22, 3.25, 3.28, 3.25, 3.22, 3.20, 3.22, 3.20, 3.19, 3.20
-    ]
-  },
-  {
-    id: 6, name: '猪后腿肉', pinyin: 'zhtm', category: '肉禽蛋', unit: '500g',
-    currentPrice: 15.80, supermarketPrice: 14.50, storeName: '小象超市',
-    yearPosition: 30,
-    history: [
-      19.50, 19.20, 18.90, 18.50, 18.20, 17.80, 17.50, 17.20, 16.90, 16.60, 16.30, 16.00, 15.80,
-      15.60, 15.40, 15.20, 15.00, 14.80, 14.60, 14.80, 15.00, 15.20, 15.40, 15.60, 15.80, 16.00,
-      16.20, 16.40, 16.60, 16.50, 16.30, 16.10, 15.90, 15.70, 15.50, 15.60, 15.70, 15.80, 15.90,
-      16.00, 15.90, 15.80, 15.70, 15.60, 15.70, 15.80, 15.90, 16.00, 15.90, 15.85, 15.80, 15.80
-    ]
-  }
+  { id:1, name:'西红柿', pinyin:'xhs', category:'蔬菜', unit:'500g', currentPrice:4.50, supermarketPrice:5.80,
+    storeName:'盒马', yearPosition:78,
+    history:[3.10,3.15,3.22,3.30,3.45,3.60,3.80,3.95,4.10,4.05,3.90,3.70,3.50,3.30,3.05,2.85,2.70,2.60,2.55,2.50,2.45,2.50,2.60,2.75,2.90,3.05,3.15,3.20,3.10,3.00,2.95,3.00,3.10,3.25,3.40,3.55,3.70,3.85,3.95,4.00,3.95,3.90,3.95,4.05,4.15,4.25,4.35,4.40,4.45,4.48,4.50,4.50] },
+  { id:2, name:'鸡蛋', pinyin:'jd', category:'肉禽蛋', unit:'500g', currentPrice:4.20, supermarketPrice:3.99,
+    storeName:'小象超市', yearPosition:22,
+    history:[4.80,4.85,4.90,4.95,5.00,5.05,5.10,5.05,4.95,4.85,4.75,4.65,4.55,4.50,4.45,4.40,4.35,4.30,4.35,4.40,4.45,4.50,4.55,4.60,4.55,4.50,4.45,4.40,4.35,4.30,4.25,4.20,4.15,4.10,4.15,4.20,4.25,4.30,4.25,4.20,4.18,4.15,4.12,4.10,4.15,4.18,4.22,4.25,4.22,4.20,4.20,4.20] },
+  { id:3, name:'草鱼', pinyin:'cy', category:'水产', unit:'500g', currentPrice:9.80, supermarketPrice:12.50,
+    storeName:'盒马', yearPosition:55,
+    history:[8.50,8.60,8.75,8.90,9.05,9.20,9.35,9.50,9.60,9.55,9.45,9.35,9.25,9.15,9.05,8.95,8.85,8.80,8.75,8.85,8.95,9.10,9.25,9.40,9.55,9.65,9.75,9.85,9.95,10.05,9.95,9.80,9.65,9.50,9.45,9.40,9.50,9.60,9.70,9.75,9.80,9.85,9.90,9.85,9.75,9.70,9.65,9.70,9.75,9.80,9.78,9.80] },
+  { id:4, name:'大白菜', pinyin:'dbc', category:'蔬菜', unit:'500g', currentPrice:1.80, supermarketPrice:1.50,
+    storeName:'小象超市', yearPosition:15,
+    history:[2.60,2.55,2.50,2.45,2.40,2.30,2.20,2.10,2.00,1.95,1.90,1.85,1.80,1.75,1.70,1.65,1.60,1.58,1.55,1.60,1.65,1.70,1.75,1.80,1.85,1.90,1.95,2.00,2.05,2.10,2.05,1.98,1.92,1.86,1.80,1.75,1.72,1.70,1.68,1.66,1.65,1.68,1.70,1.72,1.75,1.78,1.80,1.82,1.80,1.79,1.80,1.80] },
+  { id:5, name:'东北大米', pinyin:'dbdm', category:'米面粮油', unit:'500g', currentPrice:3.20, supermarketPrice:3.59,
+    storeName:'盒马', yearPosition:63,
+    history:[2.85,2.86,2.88,2.90,2.92,2.95,2.98,3.00,3.02,3.05,3.08,3.10,3.08,3.05,3.03,3.00,3.02,3.05,3.08,3.10,3.12,3.15,3.13,3.10,3.08,3.10,3.12,3.15,3.18,3.20,3.22,3.20,3.18,3.15,3.18,3.20,3.22,3.25,3.22,3.20,3.18,3.20,3.22,3.25,3.28,3.25,3.22,3.20,3.22,3.20,3.19,3.20] },
+  { id:6, name:'猪后腿肉', pinyin:'zhtm', category:'肉禽蛋', unit:'500g', currentPrice:15.80, supermarketPrice:14.50,
+    storeName:'小象超市', yearPosition:30,
+    history:[19.50,19.20,18.90,18.50,18.20,17.80,17.50,17.20,16.90,16.60,16.30,16.00,15.80,15.60,15.40,15.20,15.00,14.80,14.60,14.80,15.00,15.20,15.40,15.60,15.80,16.00,16.20,16.40,16.60,16.50,16.30,16.10,15.90,15.70,15.50,15.60,15.70,15.80,15.90,16.00,15.90,15.80,15.70,15.60,15.70,15.80,15.90,16.00,15.90,15.85,15.80,15.80] }
 ];
 
 const FAV_KEY = 'wh_cailanzi_favorites';
-let chartInstance = null; // ECharts 实例保持非响应式，避免 Vue 代理导致异常
+const SPARK_LEN = 13;      // 卡片迷你走势：最近 13 周
+let chartInstance = null;  // ECharts 实例（非响应式）
+
+/* 把价格序列归一化成 SVG 坐标（100×34 视口） */
+function sparkPoints(hist, withArea) {
+  const data = (hist || []).slice(-SPARK_LEN);
+  if (data.length < 2) return '';
+  const W = 100, H = 34, PAD = 3;
+  const min = Math.min(...data), max = Math.max(...data);
+  const rng = (max - min) || 1;
+  const pts = data.map((v, i) => {
+    const x = PAD + i * (W - PAD * 2) / (data.length - 1);
+    const y = H - PAD - ((v - min) / rng) * (H - PAD * 2);
+    return [x.toFixed(1), y.toFixed(1)];
+  });
+  if (!withArea) return pts.map(p => p.join(',')).join(' ');
+  const firstX = pts[0][0], lastX = pts[pts.length - 1][0];
+  return [[firstX, H], ...pts, [lastX, H]].map(p => p.join(',')).join(' ');
+}
 
 const { createApp } = Vue;
 
-createApp({
+const vm = createApp({
   data() {
     return {
-      mode: 'market',              // market | supermarket
+      mode: 'market',
       searchQuery: '',
       activeCategory: '全部',
       categories: ['全部', '蔬菜', '肉禽蛋', '水产', '米面粮油'],
-      items: MOCK_ITEMS,           // 默认内置演示数据；fetch data.json 成功后会被真实数据替换
-      dataSource: 'mock',          // 'mock' | 'real'
+      sorts: [
+        { key: 'default', label: '默认' },
+        { key: 'up', label: '涨幅' },
+        { key: 'down', label: '跌幅' }
+      ],
+      sortMode: 'default',
+      items: MOCK_ITEMS,
+      dataSource: 'mock',
+      loading: true,
+      scrolled: false,
       favorites: [],
       drawerVisible: false,
-      activeItem: null
+      activeItems: [],
+      compareList: [],
+      pressTimer: null,
+      toastTimer: null,
+      longPressed: false,
+      rankVisible: false,
+      rankTab: 'up',
+      toast: ''
     };
   },
   computed: {
     filteredItems() {
       const q = this.searchQuery.toLowerCase();
-      let list = this.items.filter(item => {
-        const matchCat = this.activeCategory === '全部' || item.category === this.activeCategory;
-        const matchSearch = !q
-          || item.name.includes(q)
-          || item.pinyin.toLowerCase().includes(q);
-        return matchCat && matchSearch;
+      let list = this.items.filter(it => {
+        const okCat = this.activeCategory === '全部' || it.category === this.activeCategory;
+        const okSearch = !q || it.name.includes(q) || (it.pinyin || '').toLowerCase().includes(q);
+        return okCat && okSearch;
       });
-      // 收藏置顶
       return list.slice().sort((a, b) => {
-        const fa = this.isFav(a) ? 0 : 1;
-        const fb = this.isFav(b) ? 0 : 1;
-        return fa - fb;
+        const fa = this.isFav(a) ? 0 : 1, fb = this.isFav(b) ? 0 : 1;
+        if (fa !== fb) return fa - fb;                    // 收藏置顶
+        if (this.sortMode === 'up') return this.change(b) - this.change(a);
+        if (this.sortMode === 'down') return this.change(a) - this.change(b);
+        return 0;
       });
+    },
+    stats() {
+      let up = 0, down = 0, flat = 0;
+      this.items.forEach(it => {
+        const c = this.change(it);
+        if (c > 0.001) up++; else if (c < -0.001) down++; else flat++;
+      });
+      return { up, down, flat };
+    },
+    rankList() {
+      return this.items.slice().sort((a, b) =>
+        this.rankTab === 'up'
+          ? this.change(b) - this.change(a)
+          : this.change(a) - this.change(b)
+      ).slice(0, 10);
+    },
+    compareNames() {
+      return this.compareList.map(i => i.name).join(' · ');
     }
   },
   mounted() {
-    try {
-      this.favorites = JSON.parse(localStorage.getItem(FAV_KEY)) || [];
-    } catch (e) {
-      this.favorites = [];
-    }
-    // 优先加载爬虫生成的 data.json（武汉市农业农村局真实数据）。
-    // 注意：直接双击以 file:// 打开时浏览器会拦截 fetch，自动回退到内置演示数据；
-    // 想看真实数据请在本目录运行 python -m http.server 8000 后访问 http://localhost:8000
+    try { this.favorites = JSON.parse(localStorage.getItem(FAV_KEY)) || []; }
+    catch (e) { this.favorites = []; }
+
+    window.addEventListener('scroll', this.onScroll, { passive: true });
+
+    const started = Date.now();
+    const MIN_SKELETON = 550;     // 骨架屏最短展示时长，避免一闪而过
+    const done = () => {
+      const wait = Math.max(0, MIN_SKELETON - (Date.now() - started));
+      setTimeout(() => { this.loading = false; }, wait);
+    };
+
+    // 优先读取爬虫生成的 data.json；file:// 双击打开会被浏览器拦截 → 静默回退到 MOCK_ITEMS
     fetch('data.json')
-      .then(r => {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data) && data.length) {
           this.items = data;
           this.dataSource = 'real';
         }
+        done();
       })
-      .catch(() => { /* 静默回退到 MOCK_ITEMS */ });
+      .catch(() => done());
   },
   methods: {
-    displayPrice(item) {
-      return this.mode === 'market' ? item.currentPrice : item.supermarketPrice;
+    onScroll() { this.scrolled = window.scrollY > 48; },
+
+    /* ---------- 价格 / 涨跌 ---------- */
+    displayPrice(it) { return this.mode === 'market' ? it.currentPrice : it.supermarketPrice; },
+    priceDiff(it) { return it.supermarketPrice - it.currentPrice; },
+    change(it) {
+      const h = it.history || [];
+      if (h.length < 2) return 0;
+      const prev = h[h.length - 2], cur = h[h.length - 1];
+      return prev ? (cur - prev) / prev * 100 : 0;
     },
-    priceDiff(item) {
-      // 商超价 - 市场均价：正=贵，负=省
-      return item.supermarketPrice - item.currentPrice;
+    delta(it) {
+      const h = it.history || [];
+      if (h.length < 2) return 0;
+      return h[h.length - 1] - h[h.length - 2];
     },
-    positionTag(item) {
-      const p = item.yearPosition;
-      if (p >= 70) return { text: `近1年 ${p}% 高位🔴`, cls: 'bg-red-50 text-red-500' };
-      if (p <= 30) return { text: `近1年 ${p}% 低位🟢`, cls: 'bg-green-50 text-green-600' };
-      return { text: `近1年 ${p}% 中位🟡`, cls: 'bg-yellow-50 text-yellow-600' };
+    sparkLine(it) { return sparkPoints(it.history, false); },
+    sparkArea(it) { return sparkPoints(it.history, true); },
+
+    /* 区间百分位（当前价在近 N 周内的相对位置，越高越贵） */
+    percentile(it, weeks) {
+      const h = (it.history || []).slice(-weeks);
+      if (!h.length) return 0;
+      const cur = h[h.length - 1];
+      const below = h.filter(v => v <= cur).length;
+      return Math.min(100, Math.round(below / h.length * 100));
     },
-    categoryIcon(cat) {
-      return { '蔬菜': '🥬', '肉禽蛋': '🍗', '水产': '🐟', '米面粮油': '🌾' }[cat] || '🧺';
+    pct3(it) { return this.percentile(it, 13); },
+    pct1y(it) { return this.percentile(it, 52); },
+    rangeText(it, weeks) {
+      const h = (it.history || []).slice(-weeks);
+      if (!h.length) return '';
+      return `当前 ${h[h.length - 1].toFixed(2)} · 区间 ${Math.min(...h).toFixed(2)}~${Math.max(...h).toFixed(2)}`;
     },
-    isFav(item) {
-      return this.favorites.includes(item.id);
-    },
-    toggleFav(item) {
-      const idx = this.favorites.indexOf(item.id);
-      if (idx > -1) this.favorites.splice(idx, 1);
-      else this.favorites.push(item.id);
+    posColor(p) { return p >= 70 ? 'text-red-500' : p <= 30 ? 'text-green-600' : 'text-amber-500'; },
+    posBar(p) { return p >= 70 ? 'bg-red-400' : p <= 30 ? 'bg-green-400' : 'bg-amber-400'; },
+
+    /* ---------- 收藏 ---------- */
+    isFav(it) { return this.favorites.includes(it.id); },
+    toggleFav(it) {
+      const i = this.favorites.indexOf(it.id);
+      if (i > -1) this.favorites.splice(i, 1); else this.favorites.push(it.id);
       localStorage.setItem(FAV_KEY, JSON.stringify(this.favorites));
     },
-    openDetail(item) {
-      this.activeItem = item;
+
+    /* ---------- 长按加入对比 ---------- */
+    pressStart(it) {
+      this.longPressed = false;
+      clearTimeout(this.pressTimer);
+      this.pressTimer = setTimeout(() => {
+        this.longPressed = true;
+        this.toggleCompare(it);
+      }, 550);
+    },
+    pressEnd() { clearTimeout(this.pressTimer); },
+    isComparing(it) { return this.compareList.some(x => x.id === it.id); },
+    toggleCompare(it) {
+      const i = this.compareList.findIndex(x => x.id === it.id);
+      if (i > -1) {
+        this.compareList.splice(i, 1);
+        this.showToast('已移出对比');
+        return;
+      }
+      if (this.compareList.length >= 2) { this.showToast('最多对比 2 个品种'); return; }
+      this.compareList.push(it);
+      if (this.compareList.length === 2) {
+        const pair = this.compareList.slice();
+        this.compareList = [];
+        this.openDetail(pair);
+      } else {
+        this.showToast('已加入对比，再长按一个品种');
+      }
+    },
+    clearCompare() { this.compareList = []; },
+
+    onCardClick(it) {
+      if (this.longPressed) { this.longPressed = false; return; }   // 长按后不触发点击
+      this.openDetail([it]);
+    },
+
+    /* ---------- 详情抽屉 + ECharts ---------- */
+    openDetail(list) {
+      this.activeItems = list;
       this.drawerVisible = true;
-      this.$nextTick(() => {
-        // 等抽屉展开动画完成后再初始化，保证宽度正确
-        setTimeout(() => this.renderChart(item), 60);
-      });
+      this.$nextTick(() => setTimeout(() => this.renderChart(), 90));
     },
     closeDrawer() {
       this.drawerVisible = false;
-      if (chartInstance) {
-        chartInstance.dispose();
-        chartInstance = null;
-      }
+      if (chartInstance) { chartInstance.dispose(); chartInstance = null; }
     },
-    renderChart(item) {
+    renderChart() {
       const el = this.$refs.chartEl;
-      if (!el) return;
+      if (!el || !this.activeItems.length) return;
       if (chartInstance) chartInstance.dispose();
       chartInstance = echarts.init(el);
 
-      const color = this.mode === 'market' ? '#16a34a' : '#2563eb';
+      const palette = ['#16a34a', '#2563eb'];
+      const series = this.activeItems.map((it, i) => {
+        const color = palette[i % palette.length];
+        return {
+          name: it.name,
+          type: 'line',
+          data: it.history || [],
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 2.2, color },
+          itemStyle: { color },
+          emphasis: { focus: 'series' },
+          areaStyle: i === 0 ? {
+            color: {
+              type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(22,163,74,0.20)' },
+                { offset: 1, color: 'rgba(22,163,74,0.01)' }
+              ]
+            }
+          } : undefined,
+          markPoint: this.activeItems.length === 1 ? {
+            symbolSize: 9,
+            label: { show: false },
+            data: [
+              { type: 'max', itemStyle: { color: '#ef4444' } },
+              { type: 'min', itemStyle: { color: '#22c55e' } }
+            ]
+          } : undefined
+        };
+      });
+
       chartInstance.setOption({
-        grid: { left: 40, right: 16, top: 20, bottom: 28 },
+        grid: { left: 38, right: 14, top: 26, bottom: 34 },
         tooltip: {
           trigger: 'axis',
-          formatter: p => `第${p[0].dataIndex + 1}周<br/>¥${Number(p[0].value).toFixed(2)} / ${item.unit}`
+          triggerOn: 'mousemove|click',
+          confine: true,
+          axisPointer: { type: 'line', snap: true, lineStyle: { color: '#94a3b8', type: 'dashed' } },
+          textStyle: { fontSize: 11 },
+          formatter: ps => {
+            const idx = ps[0].dataIndex;
+            let s = '<div style="font-size:11px;color:#94a3b8;margin-bottom:2px">第 ' + (idx + 1) + ' 周</div>';
+            ps.forEach(p => {
+              s += '<div style="margin-top:2px">' + p.marker + p.seriesName +
+                   ' <b style="margin-left:6px">¥' + Number(p.value).toFixed(2) + '</b></div>';
+            });
+            return s;
+          }
         },
+        legend: this.activeItems.length > 1
+          ? { top: 0, right: 0, itemWidth: 12, itemHeight: 8, textStyle: { fontSize: 10, color: '#6b7280' } }
+          : { show: false },
         xAxis: {
           type: 'category',
-          data: item.history.map((_, i) => `W${i + 1}`),
-          axisLabel: { interval: 12, fontSize: 10, color: '#9ca3af' },
+          data: (this.activeItems[0].history || []).map((_, i) => 'W' + (i + 1)),
+          boundaryGap: false,
+          axisLabel: { interval: 12, fontSize: 9, color: '#9ca3af' },
           axisLine: { lineStyle: { color: '#e5e7eb' } },
           axisTick: { show: false }
         },
         yAxis: {
           type: 'value',
           scale: true,
-          axisLabel: { fontSize: 10, color: '#9ca3af' },
+          axisLabel: { fontSize: 9, color: '#9ca3af' },
           splitLine: { lineStyle: { color: '#f3f4f6' } }
         },
-        series: [{
-          name: item.name,
-          type: 'line',
-          data: item.history,
-          smooth: true,
-          symbol: 'none',
-          lineStyle: { width: 2.5, color: color },
-          areaStyle: {
-            color: {
-              type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: color + '55' },
-                { offset: 1, color: color + '05' }
-              ]
-            }
-          },
-          markPoint: {
-            symbolSize: 42,
-            label: { fontSize: 10 },
-            data: [
-              { type: 'max', name: '最高' },
-              { type: 'min', name: '最低' }
-            ]
-          }
-        }]
+        // 手势：双指缩放 / 单指拖动平移
+        dataZoom: [{ type: 'inside', zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 50 }],
+        series: series
       });
       chartInstance.resize();
+    },
+
+    /* ---------- 其它 ---------- */
+    openRank() { this.rankVisible = true; },
+    showToast(msg) {
+      this.toast = msg;
+      clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => { this.toast = ''; }, 1600);
     }
   }
 }).mount('#app');
+
+// 暴露实例，便于调试与自动化验收（对正常使用无影响）
+window.__cailanzi = vm;
 </script>
 </body>
 </html>

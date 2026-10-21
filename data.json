@@ -1446,10 +1446,10 @@
     "pinyin": "jd",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 2.62,
+    "currentPrice": 2.75,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 63,
     "history": [
       3.13,
       3.22,
@@ -1502,7 +1502,7 @@
       2.51,
       2.54,
       2.5,
-      2.62
+      2.75
     ],
     "historyReal": false,
     "prevObs": null,
@@ -1518,10 +1518,10 @@
     "pinyin": "ymb",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.54,
+    "currentPrice": 1.5,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 60,
+    "yearPosition": 56,
     "history": [
       1.77,
       1.83,
@@ -1574,7 +1574,7 @@
       1.45,
       1.43,
       1.43,
-      1.54
+      1.5
     ],
     "historyReal": false,
     "prevObs": null,
@@ -1590,10 +1590,10 @@
     "pinyin": "jzg",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.81,
+    "currentPrice": 1.9,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 62,
+    "yearPosition": 63,
     "history": [
       2.09,
       2.2,
@@ -1646,7 +1646,7 @@
       1.68,
       1.7,
       1.71,
-      1.81
+      1.9
     ],
     "historyReal": false,
     "prevObs": null,
@@ -1734,10 +1734,10 @@
     "pinyin": "pg",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.63,
+    "currentPrice": 1.75,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 65,
     "history": [
       1.94,
       2.01,
@@ -1790,7 +1790,7 @@
       1.55,
       1.57,
       1.56,
-      1.63
+      1.75
     ],
     "historyReal": false,
     "prevObs": null,
@@ -1806,7 +1806,7 @@
     "pinyin": "xg",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 6.12,
+    "currentPrice": 6.0,
     "supermarketPrice": null,
     "storeName": "",
     "yearPosition": 58,
@@ -1862,7 +1862,7 @@
       5.84,
       5.76,
       5.64,
-      6.12
+      6.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -1878,10 +1878,10 @@
     "pinyin": "xc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 3.38,
+    "currentPrice": 3.5,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 60,
+    "yearPosition": 62,
     "history": [
       3.88,
       4.03,
@@ -1934,7 +1934,7 @@
       3.17,
       3.15,
       3.14,
-      3.38
+      3.5
     ],
     "historyReal": false,
     "prevObs": null,
@@ -1950,10 +1950,10 @@
     "pinyin": "sj",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 3.92,
+    "currentPrice": 3.85,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 62,
+    "yearPosition": 54,
     "history": [
       4.52,
       4.75,
@@ -2006,7 +2006,7 @@
       3.64,
       3.68,
       3.7,
-      3.92
+      3.85
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2022,7 +2022,7 @@
     "pinyin": "ct",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.42,
+    "currentPrice": 1.4,
     "supermarketPrice": null,
     "storeName": "",
     "yearPosition": 58,
@@ -2078,7 +2078,7 @@
       1.37,
       1.36,
       1.32,
-      1.42
+      1.4
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2166,10 +2166,10 @@
     "pinyin": "st",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 6.0,
+    "currentPrice": 5.5,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 60,
+    "yearPosition": 27,
     "history": [
       6.91,
       7.24,
@@ -2222,7 +2222,7 @@
       5.57,
       5.61,
       5.64,
-      6.0
+      5.5
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2310,10 +2310,10 @@
     "pinyin": "jc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 2.94,
+    "currentPrice": 3.0,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 58,
+    "yearPosition": 60,
     "history": [
       3.45,
       3.5,
@@ -2366,7 +2366,7 @@
       2.83,
       2.79,
       2.72,
-      2.94
+      3.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2454,10 +2454,10 @@
     "pinyin": "md",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 3.1,
+    "currentPrice": 3.0,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 54,
     "history": [
       3.7,
       3.81,
@@ -2510,7 +2510,7 @@
       2.97,
       3.0,
       2.96,
-      3.1
+      3.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2526,10 +2526,10 @@
     "pinyin": "jg",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.73,
+    "currentPrice": 1.75,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 62,
     "history": [
       2.02,
       2.12,
@@ -2582,7 +2582,7 @@
       1.61,
       1.64,
       1.65,
-      1.73
+      1.75
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2598,10 +2598,10 @@
     "pinyin": "hz",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.57,
+    "currentPrice": 1.65,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 58,
+    "yearPosition": 63,
     "history": [
       1.83,
       1.92,
@@ -2654,7 +2654,7 @@
       1.46,
       1.49,
       1.5,
-      1.57
+      1.65
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2742,10 +2742,10 @@
     "pinyin": "kg",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.92,
+    "currentPrice": 1.95,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 58,
     "history": [
       2.29,
       2.35,
@@ -2798,7 +2798,7 @@
       1.85,
       1.86,
       1.82,
-      1.92
+      1.95
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2814,7 +2814,7 @@
     "pinyin": "sy",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 3.95,
+    "currentPrice": 4.0,
     "supermarketPrice": null,
     "storeName": "",
     "yearPosition": 56,
@@ -2870,7 +2870,7 @@
       3.74,
       3.81,
       3.79,
-      3.95
+      4.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2886,7 +2886,7 @@
     "pinyin": "hs",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.52,
+    "currentPrice": 1.5,
     "supermarketPrice": null,
     "storeName": "",
     "yearPosition": 58,
@@ -2942,7 +2942,7 @@
       1.47,
       1.46,
       1.42,
-      1.52
+      1.5
     ],
     "historyReal": false,
     "prevObs": null,
@@ -2958,10 +2958,10 @@
     "pinyin": "jb",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 4.25,
+    "currentPrice": 4.0,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 40,
     "history": [
       5.05,
       5.24,
@@ -3014,7 +3014,7 @@
       4.03,
       4.1,
       4.07,
-      4.25
+      4.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3030,7 +3030,7 @@
     "pinyin": "yt",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 2.56,
+    "currentPrice": 2.5,
     "supermarketPrice": null,
     "storeName": "",
     "yearPosition": 58,
@@ -3086,7 +3086,7 @@
       2.45,
       2.41,
       2.36,
-      2.56
+      2.5
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3246,10 +3246,10 @@
     "pinyin": "xlh",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 3.12,
+    "currentPrice": 3.25,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 63,
     "history": [
       3.67,
       3.84,
@@ -3302,7 +3302,7 @@
       2.93,
       2.99,
       2.99,
-      3.12
+      3.25
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3318,7 +3318,7 @@
     "pinyin": "qc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 2.48,
+    "currentPrice": 2.45,
     "supermarketPrice": null,
     "storeName": "",
     "yearPosition": 56,
@@ -3374,7 +3374,7 @@
       2.37,
       2.4,
       2.37,
-      2.48
+      2.45
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3390,10 +3390,10 @@
     "pinyin": "xc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 3.88,
+    "currentPrice": 4.0,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 60,
+    "yearPosition": 62,
     "history": [
       4.45,
       4.65,
@@ -3446,7 +3446,7 @@
       3.62,
       3.61,
       3.62,
-      3.88
+      4.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3462,10 +3462,10 @@
     "pinyin": "sj",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 2.12,
+    "currentPrice": 2.25,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 63,
     "history": [
       2.47,
       2.6,
@@ -3518,7 +3518,7 @@
       1.98,
       2.01,
       2.02,
-      2.12
+      2.25
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3534,10 +3534,10 @@
     "pinyin": "ymc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.8,
+    "currentPrice": 1.85,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 63,
     "history": [
       2.12,
       2.22,
@@ -3590,7 +3590,7 @@
       1.69,
       1.72,
       1.72,
-      1.8
+      1.85
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3606,10 +3606,10 @@
     "pinyin": "xc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.88,
+    "currentPrice": 2.0,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 58,
+    "yearPosition": 63,
     "history": [
       2.23,
       2.26,
@@ -3662,7 +3662,7 @@
       1.82,
       1.81,
       1.76,
-      1.88
+      2.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3678,10 +3678,10 @@
     "pinyin": "zyc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 1.88,
+    "currentPrice": 2.0,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 58,
+    "yearPosition": 63,
     "history": [
       2.24,
       2.29,
@@ -3734,7 +3734,7 @@
       1.81,
       1.82,
       1.77,
-      1.88
+      2.0
     ],
     "historyReal": false,
     "prevObs": null,
@@ -3750,10 +3750,10 @@
     "pinyin": "bc",
     "category": "蔬菜",
     "unit": "500g",
-    "currentPrice": 3.12,
+    "currentPrice": 3.25,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 56,
+    "yearPosition": 63,
     "history": [
       3.72,
       3.85,
@@ -3806,7 +3806,7 @@
       2.97,
       3.02,
       2.99,
-      3.12
+      3.25
     ],
     "historyReal": false,
     "prevObs": null,
@@ -5339,7 +5339,6 @@
     "storeName": "",
     "yearPosition": 79,
     "history": [
-      12.86,
       12.73,
       12.74,
       13.03,
@@ -5390,6 +5389,7 @@
       13.02,
       12.84,
       12.69,
+      13.03,
       13.03
     ],
     "historyReal": false,
@@ -5397,7 +5397,7 @@
     "prevObsAge": null,
     "obsWeeks": 52,
     "source": "商务局·周报",
-    "updated": "20260911"
+    "updated": "2026-09-11"
   },
   {
     "id": 76,
@@ -5411,7 +5411,6 @@
     "storeName": "",
     "yearPosition": 81,
     "history": [
-      15.7,
       15.59,
       15.68,
       16.06,
@@ -5462,6 +5461,7 @@
       15.89,
       15.68,
       15.56,
+      15.98,
       15.98
     ],
     "historyReal": false,
@@ -5469,7 +5469,7 @@
     "prevObsAge": null,
     "obsWeeks": 52,
     "source": "商务局·周报",
-    "updated": "20260911"
+    "updated": "2026-09-11"
   },
   {
     "id": 77,
@@ -5481,9 +5481,8 @@
     "currentPrice": 44.13,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 71,
+    "yearPosition": 73,
     "history": [
-      44.69,
       44.2,
       43.38,
       43.3,
@@ -5534,6 +5533,7 @@
       44.54,
       44.67,
       44.01,
+      44.13,
       44.13
     ],
     "historyReal": false,
@@ -5541,7 +5541,7 @@
     "prevObsAge": null,
     "obsWeeks": 52,
     "source": "商务局·周报",
-    "updated": "20260911"
+    "updated": "2026-09-11"
   },
   {
     "id": 78,
@@ -5553,9 +5553,8 @@
     "currentPrice": 40.35,
     "supermarketPrice": null,
     "storeName": "",
-    "yearPosition": 73,
+    "yearPosition": 75,
     "history": [
-      40.41,
       40.95,
       40.78,
       40.45,
@@ -5606,6 +5605,7 @@
       39.68,
       40.52,
       40.89,
+      40.35,
       40.35
     ],
     "historyReal": false,
@@ -5613,7 +5613,7 @@
     "prevObsAge": null,
     "obsWeeks": 52,
     "source": "商务局·周报",
-    "updated": "20260911"
+    "updated": "2026-09-11"
   },
   {
     "id": 79,
@@ -7067,7 +7067,6 @@
     "storeName": "",
     "yearPosition": 35,
     "history": [
-      8.66,
       8.46,
       8.46,
       8.58,
@@ -7118,6 +7117,7 @@
       9.19,
       9.05,
       8.9,
+      8.99,
       8.99
     ],
     "historyReal": false,
@@ -7125,7 +7125,7 @@
     "prevObsAge": null,
     "obsWeeks": 52,
     "source": "商务局·周报",
-    "updated": "20260911"
+    "updated": "2026-09-11"
   },
   {
     "id": 100,
@@ -7139,7 +7139,6 @@
     "storeName": "",
     "yearPosition": 35,
     "history": [
-      15.19,
       15.23,
       15.4,
       15.43,
@@ -7190,6 +7189,7 @@
       15.82,
       15.94,
       16.07,
+      15.88,
       15.88
     ],
     "historyReal": false,
@@ -7197,7 +7197,7 @@
     "prevObsAge": null,
     "obsWeeks": 52,
     "source": "商务局·周报",
-    "updated": "20260911"
+    "updated": "2026-09-11"
   },
   {
     "id": 101,
@@ -7211,7 +7211,6 @@
     "storeName": "",
     "yearPosition": 33,
     "history": [
-      24.23,
       23.69,
       23.18,
       22.84,
@@ -7262,6 +7261,7 @@
       25.22,
       25.37,
       24.89,
+      24.43,
       24.43
     ],
     "historyReal": false,
@@ -7269,7 +7269,7 @@
     "prevObsAge": null,
     "obsWeeks": 52,
     "source": "商务局·周报",
-    "updated": "20260911"
+    "updated": "2026-09-11"
   },
   {
     "id": 102,

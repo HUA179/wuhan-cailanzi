@@ -45,7 +45,7 @@
           :class="dataSource === 'real'
             ? 'text-green-600 border-green-300 bg-green-50'
             : 'text-amber-600 border-amber-300 bg-amber-50'">
-          {{ dataSource === 'real' ? '官方真实' : '演示数据' }}
+          {{ dataSource === 'real' ? sourceStats.length + ' 源官方数据' : '演示数据' }}
         </span>
       </div>
       <button @click="openRank" class="text-xs px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-600 font-medium active:bg-gray-200">
@@ -70,6 +70,22 @@
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
       <button v-if="searchQuery" @click="searchQuery=''"
         class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">✕</button>
+    </div>
+
+    <!-- 数据来源筛选（每栏都标明官方出处） -->
+    <div v-if="dataSource === 'real'" class="mt-2.5 -mx-4 px-4 overflow-x-auto no-scrollbar">
+      <div class="flex gap-1.5 w-max">
+        <button @click="activeSource=''"
+          :class="activeSource==='' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200'"
+          class="text-[11px] px-2 py-1 rounded-full border font-medium transition-colors">
+          全部来源 · {{ modeTotal }}
+        </button>
+        <button v-for="s in sourceStats" :key="s.label" @click="activeSource = activeSource===s.label ? '' : s.label"
+          :class="activeSource===s.label ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200'"
+          class="text-[11px] px-2 py-1 rounded-full border font-medium transition-colors whitespace-nowrap">
+          {{ s.label }} · {{ s.count }}
+        </button>
+      </div>
     </div>
   </div>
 
@@ -139,9 +155,9 @@
           <div class="flex items-center gap-1.5 flex-wrap min-w-0">
             <span class="font-semibold text-[15px] text-gray-800 truncate">{{ item.name }}</span>
             <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 shrink-0">{{ item.category }}</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0"
-              :class="dataSource==='real' ? 'text-green-600 border-green-200 bg-green-50/70' : 'text-amber-600 border-amber-200 bg-amber-50/70'">
-              {{ dataSource==='real' ? '官方真实' : '演示' }}
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 font-medium"
+              :class="sourceClass(item)">
+              {{ sourceLabel(item) }}
             </span>
             <span v-if="isComparing(item)" class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">对比中</span>
           </div>
@@ -159,21 +175,28 @@
               </span>
               <span class="text-[10px] text-gray-400">元/500g</span>
               <span class="ml-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-md"
-                :class="change(item) > 0 ? 'bg-red-50 text-red-500'
-                      : change(item) < 0 ? 'bg-green-50 text-green-600'
+                :class="change(item) > 0.005 ? 'bg-red-50 text-red-500'
+                      : change(item) < -0.005 ? 'bg-green-50 text-green-600'
                       : 'bg-gray-100 text-gray-400'">
-                {{ change(item) > 0 ? '↑' : change(item) < 0 ? '↓' : '—' }}{{ Math.abs(change(item)).toFixed(2) }}%
+                {{ change(item) > 0.005 ? '+' + Math.abs(change(item)).toFixed(2) + '%'
+                 : change(item) < -0.005 ? '-' + Math.abs(change(item)).toFixed(2) + '%'
+                 : '持平' }}
               </span>
             </div>
             <div class="text-[11px] text-gray-400 mt-1.5">
-              周环比
-              <span :class="change(item) > 0 ? 'text-red-500 font-medium' : change(item) < 0 ? 'text-green-600 font-medium' : 'text-gray-500'">
-                {{ change(item) > 0 ? '+' : '' }}{{ change(item).toFixed(2) }}%
+              <span v-if="Math.abs(change(item)) < 0.005 && Math.abs(delta(item)) < 0.005">
+                {{ mode === 'supermarket' ? '市场价' : '' }}周环比 · 与上周持平
               </span>
-              · 涨跌
-              <span :class="delta(item) > 0 ? 'text-red-500' : delta(item) < 0 ? 'text-green-600' : 'text-gray-500'">
-                {{ delta(item) > 0 ? '+' : '' }}{{ delta(item).toFixed(2) }}元
-              </span>
+              <template v-else>
+                {{ mode === 'supermarket' ? '市场价' : '' }}周环比
+                <span :class="change(item) > 0 ? 'text-red-500 font-medium' : 'text-green-600 font-medium'">
+                  {{ change(item) > 0 ? '+' : '' }}{{ change(item).toFixed(2) }}%
+                </span>
+                · 涨跌
+                <span :class="delta(item) > 0 ? 'text-red-500' : 'text-green-600'">
+                  {{ delta(item) > 0 ? '+' : '' }}{{ delta(item).toFixed(2) }}元
+                </span>
+              </template>
             </div>
           </div>
 
@@ -186,8 +209,12 @@
           </svg>
         </div>
 
-        <!-- 行3：双百分位 -->
-        <div class="grid grid-cols-2 gap-3 mt-2.5">
+        <!-- 行3：双百分位 / 价格平稳 -->
+        <div v-if="isStable(item)" class="mt-2.5 flex items-center gap-2">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0">价格平稳</span>
+          <span class="text-[10px] text-gray-400 truncate">{{ rangeText(item, 52) }}</span>
+        </div>
+        <div v-else class="grid grid-cols-2 gap-3 mt-2.5">
           <div>
             <div class="flex items-baseline justify-between">
               <span class="text-[10px] text-gray-400">近3个月位置</span>
@@ -230,6 +257,7 @@
     </template>
 
     <p v-if="!loading" class="text-center text-[10px] text-gray-400 pt-1 pb-2 leading-relaxed">
+      数据来源：武汉市发改委（每日零售价）· 农业农村局（批发价）· 商务局（周报）<br>
       位置 = 当前价在 13 周 / 52 周区间的百分位（越高越贵）<br>
       长按卡片可加入对比（选 2 个），点击查看走势图
     </p>
@@ -304,8 +332,13 @@
             <div class="font-bold text-lg text-gray-800 truncate">
               {{ activeItems.map(i => i.name).join('  vs  ') }}
             </div>
-            <div class="text-[11px] text-gray-400 mt-0.5">
-              {{ activeItems.length > 1 ? '长按选中 · 双品对比' : (activeItems[0] ? activeItems[0].category + ' · ' + activeItems[0].unit : '') }}
+            <div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>{{ activeItems.length > 1 ? '长按选中 · 双品对比' : (activeItems[0] ? activeItems[0].category + ' · ' + activeItems[0].unit : '') }}</span>
+              <span v-if="activeItems.length === 1 && activeItems[0]"
+                class="px-1.5 py-0.5 rounded-full border font-medium"
+                :class="sourceClass(activeItems[0])">{{ sourceLabel(activeItems[0]) }}</span>
+              <span v-if="activeItems.length === 1 && activeItems[0] && activeItems[0].updated"
+                class="text-gray-300">{{ activeItems[0].updated }}</span>
             </div>
           </div>
           <button @click="closeDrawer" class="text-gray-400 text-lg leading-none shrink-0">✕</button>
@@ -327,8 +360,13 @@
           </div>
         </div>
 
-        <!-- 双百分位（单品种） -->
-        <div v-if="activeItems.length === 1 && activeItems[0]" class="grid grid-cols-2 gap-2.5 mt-3">
+        <!-- 双百分位（单品种）：价格近乎不动时百分位无意义 -->
+        <div v-if="activeItems.length === 1 && activeItems[0] && isStable(activeItems[0])"
+          class="mt-3 bg-slate-50 rounded-xl p-3 flex items-center gap-2">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 shrink-0">价格平稳</span>
+          <span class="text-[11px] text-slate-500">近一年几乎无波动 · {{ rangeText(activeItems[0], 52) }}</span>
+        </div>
+        <div v-else-if="activeItems.length === 1 && activeItems[0]" class="grid grid-cols-2 gap-2.5 mt-3">
           <div class="bg-gray-50 rounded-xl p-2.5">
             <div class="text-[10px] text-gray-400">近3个月位置（13周）</div>
             <div class="text-lg font-bold" :class="posColor(pct3(activeItems[0]))">{{ pct3(activeItems[0]) }}%</div>
@@ -429,7 +467,7 @@ const vm = createApp({
       mode: 'market',
       searchQuery: '',
       activeCategory: '全部',
-      categories: ['全部', '蔬菜', '肉禽蛋', '水产', '米面粮油'],
+      categories: ['全部', '蔬菜', '肉禽蛋', '水产', '米面粮油', '豆制品'],
       sorts: [
         { key: 'default', label: '默认' },
         { key: 'up', label: '涨幅' },
@@ -438,6 +476,7 @@ const vm = createApp({
       sortMode: 'default',
       items: MOCK_ITEMS,
       dataSource: 'mock',
+      activeSource: '',
       loading: true,
       scrolled: false,
       favorites: [],
@@ -458,7 +497,10 @@ const vm = createApp({
       let list = this.items.filter(it => {
         const okCat = this.activeCategory === '全部' || it.category === this.activeCategory;
         const okSearch = !q || it.name.includes(q) || (it.pinyin || '').toLowerCase().includes(q);
-        return okCat && okSearch;
+        // 商超模式：批发源品种没有对应商超报价，直接不展示
+        const okMode = this.mode === 'market' || it.supermarketPrice != null;
+        const okSrc = !this.activeSource || this.sourceLabel(it) === this.activeSource;
+        return okCat && okSearch && okMode && okSrc;
       });
       return list.slice().sort((a, b) => {
         const fa = this.isFav(a) ? 0 : 1, fb = this.isFav(b) ? 0 : 1;
@@ -485,6 +527,25 @@ const vm = createApp({
     },
     compareNames() {
       return this.compareList.map(i => i.name).join(' · ');
+    },
+    /* 各官方数据源的品种数（用于顶部来源筛选条） */
+    sourceStats() {
+      const m = {};
+      this.items.forEach(it => {
+        if (this.mode === 'supermarket' && it.supermarketPrice == null) return;
+        const s = it.source || '';
+        const k = s.includes('发改委') ? '发改委·每日'
+                : s.includes('农业农村') ? '农业局·批发'
+                : s.includes('商务局') ? '商务局·周报'
+                : (s || '演示');
+        m[k] = (m[k] || 0) + 1;
+      });
+      return Object.keys(m).map(k => ({ label: k, count: m[k] }))
+        .sort((a, b) => b.count - a.count);
+    },
+    /* 当前 Tab 下的总品种数（来源条上的「全部来源」） */
+    modeTotal() {
+      return this.items.filter(it => this.mode === 'market' || it.supermarketPrice != null).length;
     }
   },
   mounted() {
@@ -550,11 +611,35 @@ const vm = createApp({
     posColor(p) { return p >= 70 ? 'text-red-500' : p <= 30 ? 'text-green-600' : 'text-amber-500'; },
     posBar(p) { return p >= 70 ? 'bg-red-400' : p <= 30 ? 'bg-green-400' : 'bg-amber-400'; },
 
-    /* ---------- 收藏 ---------- */
-    isFav(it) { return this.favorites.includes(it.id); },
+    /* ---------- 数据来源标注 ---------- */
+    sourceLabel(it) {
+      const s = it.source || '';
+      if (s.includes('发改委')) return '发改委·每日';
+      if (s.includes('农业农村')) return '农业局·批发';
+      if (s.includes('商务局')) return '商务局·周报';
+      return s || '演示';
+    },
+    sourceClass(it) {
+      const s = it.source || '';
+      if (s.includes('发改委')) return 'text-emerald-600 border-emerald-200 bg-emerald-50/70';
+      if (s.includes('农业农村')) return 'text-sky-600 border-sky-200 bg-sky-50/70';
+      if (s.includes('商务局')) return 'text-violet-600 border-violet-200 bg-violet-50/70';
+      return 'text-amber-600 border-amber-200 bg-amber-50/70';
+    },
+    /* 52 周波动极小（<1.5%）视为价格平稳，百分位没有参考意义 */
+    isStable(it) {
+      const h = it.history || [];
+      if (h.length < 8) return false;
+      const avg = h.reduce((s, v) => s + v, 0) / h.length;
+      if (!avg) return false;
+      return (Math.max(...h) - Math.min(...h)) / avg < 0.015;
+    },
+
+    /* ---------- 收藏（按名称存，数据每天刷新 id 会变） ---------- */
+    isFav(it) { return this.favorites.includes(it.name); },
     toggleFav(it) {
-      const i = this.favorites.indexOf(it.id);
-      if (i > -1) this.favorites.splice(i, 1); else this.favorites.push(it.id);
+      const i = this.favorites.indexOf(it.name);
+      if (i > -1) this.favorites.splice(i, 1); else this.favorites.push(it.name);
       localStorage.setItem(FAV_KEY, JSON.stringify(this.favorites));
     },
 

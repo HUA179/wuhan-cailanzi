@@ -29,6 +29,8 @@ import json
 import random
 import re
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
 
@@ -49,7 +51,9 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 }
-TIMEOUT = 25
+TIMEOUT = 15                   # 单次请求超时（境外跑 Actions 时政务网偶有丢包，超过 15s 基本没救）
+RETRY = 2                      # 重试次数
+MAX_WORKERS = 6                # 历史日期并发数（串行 52 周在境外机器上要跑十几分钟）
 WEEKS = 52                    # 走势图窗口
 
 # 农业农村局栏目：column -> (前端分类, 抓最新几篇)
@@ -77,24 +81,33 @@ NAME_ALIAS = {
     "猪腿夹肉": "猪腿夹肉",
 }
 
-session = requests.Session()
-session.headers.update({"User-Agent": HEADERS["User-Agent"], "Referer": FGJ_REFERER})
+_local = threading.local()
+
+
+def _sess():
+    """每个线程一个 Session，避免共享连接池在多线程下互相干扰。"""
+    s = getattr(_local, "s", None)
+    if s is None:
+        s = requests.Session()
+        s.headers.update({"User-Agent": HEADERS["User-Agent"], "Referer": FGJ_REFERER})
+        _local.s = s
+    return s
 
 
 # ---------------------------------------------------------------- 发改委接口
 
 def fgj_get(path, params=None):
-    """调用发改委平台接口，失败重试 2 次。"""
-    for i in range(3):
+    """调用发改委平台接口，失败重试 RETRY 次。"""
+    for i in range(RETRY + 1):
         try:
-            r = session.get(FGJ_API + path, params=params or {}, timeout=TIMEOUT)
+            r = _sess().get(FGJ_API + path, params=params or {}, timeout=TIMEOUT)
             j = r.json()
             if j.get("code") == 200:
                 return j.get("data") or {}
             print(f"  [warn] {path} 返回 {j.get('msg')}")
             return {}
         except Exception as e:
-            if i == 2:
+            if i == RETRY:
                 print(f"  [error] {path} 失败: {e}")
                 return {}
     return {}
@@ -352,8 +365,9 @@ def main():
         # 真实 52 周历史：逐周拉取
         dates = weekly_dates(latest)
         print(f"  回溯 {len(dates)} 周历史（{dates[0]} ~ {dates[-1]}）...")
-        for d in dates:
-            daily_cache[d] = fgj_daily(d)
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+            results = list(ex.map(fgj_daily, dates))
+        daily_cache = dict(zip(dates, results))
         got = sum(1 for v in daily_cache.values() if v)
         print(f"  历史样本命中 {got}/{len(dates)} 周")
 

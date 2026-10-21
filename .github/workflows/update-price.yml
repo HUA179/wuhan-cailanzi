@@ -12,6 +12,7 @@ permissions:
 jobs:
   update-price:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
@@ -21,7 +22,19 @@ jobs:
           python-version: '3.12'
       - name: 安装依赖
         run: pip install requests beautifulsoup4 pypinyin
+      - name: 探测数据源可达性
+        continue-on-error: true
+        run: |
+          echo "=== 发改委（裸 IP:7600，境外可能不通） ==="
+          curl -s -o /dev/null -m 20 -w "http=%{http_code} time=%{time_total}s\n" \
+            -H "Referer: http://58.48.136.167:7600/comparePrice" \
+            "http://58.48.136.167:7600/prod-api/business/mrjg/queryJBSJData?date=$(date -u +%Y-%m-%d)" \
+            || echo "发改委不可达（将退回仅用农业局+商务局）"
+          echo "=== 农业农村局 ==="
+          curl -s -o /dev/null -m 20 -w "http=%{http_code} time=%{time_total}s\n" \
+            "https://nyncj.wuhan.gov.cn/" || echo "农业局不可达"
       - name: 抓取最新菜价
+        timeout-minutes: 10
         run: python fetch_data.py
       - name: 提交并推送 data.json
         run: |

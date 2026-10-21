@@ -96,9 +96,15 @@ def _sess():
 
 # ---------------------------------------------------------------- 发改委接口
 
-def fgj_get(path, params=None):
-    """调用发改委平台接口，失败重试 RETRY 次。"""
-    for i in range(RETRY + 1):
+def fgj_get(path, params=None, retries=None):
+    """
+    调用发改委平台接口。
+    返回 dict = 有响应（可能为空数据）；返回 None = 网络层彻底失败。
+    区分这两者是关键：境外 Actions 访问裸 IP:7600 常常直接超时，
+    若把超时当成「这天没数据」，探测就会一天天重试，白等好几十分钟。
+    """
+    n = RETRY if retries is None else retries
+    for i in range(n + 1):
         try:
             r = _sess().get(FGJ_API + path, params=params or {}, timeout=TIMEOUT)
             j = r.json()
@@ -107,15 +113,17 @@ def fgj_get(path, params=None):
             print(f"  [warn] {path} 返回 {j.get('msg')}")
             return {}
         except Exception as e:
-            if i == RETRY:
-                print(f"  [error] {path} 失败: {e}")
-                return {}
-    return {}
+            if i == n:
+                print(f"  [error] {path} 失败: {type(e).__name__}")
+                return None
+    return None
 
 
 def fgj_daily(date_str):
-    """某天的每日价格：{品种名: {avg,max,min,unit,spec}}"""
+    """某天的每日价格：{品种名: {avg,max,min,unit,spec}}；网络失败返回 None。"""
     data = fgj_get("/business/mrjg/queryJBSJData", {"date": date_str})
+    if data is None:
+        return None
     rows = ((data.get("jbsjData") or {}).get("data")) or []
     out = {}
     for r in rows:
@@ -133,19 +141,39 @@ def fgj_daily(date_str):
 
 
 def fgj_latest_date():
-    """从今天往前找最近一个有数据的日期。"""
+    """
+    从今天往前找最近一个有数据的日期。
+    一旦遇到网络层失败（返回 None）立刻放弃——说明整条链路不通，
+    再往前往后试都是白等。这是 GitHub Actions 跑境外机器时的关键保护。
+    """
     d = datetime.now()
-    for _ in range(12):
+    for _ in range(6):
         s = d.strftime("%Y-%m-%d")
-        if fgj_daily(s):
+        r = fgj_daily(s)
+        if r:
             return s
+        if r is None:
+            print("  [warn] 发改委接口不可达，跳过该数据源")
+            return None
         d -= timedelta(days=1)
     return None
+
+
+def fgj_reachable():
+    """快速探测发改委是否可达（1 次请求、8 秒超时）。"""
+    try:
+        r = _sess().get(FGJ_API + "/business/mrjg/queryJBSJData",
+                        params={"date": datetime.now().strftime("%Y-%m-%d")}, timeout=8)
+        return r.status_code == 200
+    except Exception:
+        return False
 
 
 def fgj_supermarkets():
     """取超市类监测点，按数据覆盖量从多到少排序。"""
     data = fgj_get("/dataStatistics/priceCompare/queryPointList", {"areaCode": AREA_CODE})
+    if not data:
+        return []
     pts = data.get("pointList") or []
     supers = [p for p in pts if p.get("pointType") == "超市"]
     return supers
@@ -155,6 +183,8 @@ def fgj_point_prices(point_id, date_str):
     """单个监测点的逐品价格：{品种名: 价格}"""
     data = fgj_get("/dataStatistics/priceCompare/queryDataForPoint",
                    {"pointId": point_id, "date": date_str})
+    if not data:
+        return {}
     rows = data.get("pointData") or []
     out = {}
     for r in rows:

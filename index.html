@@ -175,16 +175,21 @@
               </span>
               <span class="text-[10px] text-gray-400">元/500g</span>
               <span class="ml-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-md"
-                :class="change(item) > 0.005 ? 'bg-red-50 text-red-500'
+                :class="isReopen(item) ? 'bg-slate-100 text-slate-500'
+                      : change(item) > 0.005 ? 'bg-red-50 text-red-500'
                       : change(item) < -0.005 ? 'bg-green-50 text-green-600'
                       : 'bg-gray-100 text-gray-400'">
-                {{ change(item) > 0.005 ? '+' + Math.abs(change(item)).toFixed(2) + '%'
+                {{ isReopen(item) ? '季节性上市'
+                 : change(item) > 0.005 ? '+' + Math.abs(change(item)).toFixed(2) + '%'
                  : change(item) < -0.005 ? '-' + Math.abs(change(item)).toFixed(2) + '%'
                  : '持平' }}
               </span>
             </div>
             <div class="text-[11px] text-gray-400 mt-1.5">
-              <span v-if="Math.abs(change(item)) < 0.005 && Math.abs(delta(item)) < 0.005">
+              <span v-if="isReopen(item)">
+                停报 {{ item.prevObsAge }} 周后重新上市 · 上次 ¥{{ item.prevObs.toFixed(2) }}
+              </span>
+              <span v-else-if="Math.abs(change(item)) < 0.005 && Math.abs(delta(item)) < 0.005">
                 {{ mode === 'supermarket' ? '市场价' : '' }}周环比 · 与上周持平
               </span>
               <template v-else>
@@ -298,6 +303,7 @@
           <span>涨 <b class="text-red-500">{{ stats.up }}</b></span>
           <span>跌 <b class="text-green-600">{{ stats.down }}</b></span>
           <span>平 <b class="text-gray-500">{{ stats.flat }}</b></span>
+          <span class="ml-auto text-gray-300">周环比 · 已排除季节性重新上市</span>
         </div>
       </div>
       <div class="overflow-y-auto px-5 pb-8">
@@ -513,13 +519,14 @@ const vm = createApp({
     stats() {
       let up = 0, down = 0, flat = 0;
       this.items.forEach(it => {
+        if (this.isReopen(it)) return;          // 季节性重新上市不参与涨跌统计
         const c = this.change(it);
-        if (c > 0.001) up++; else if (c < -0.001) down++; else flat++;
+        if (c > 0.005) up++; else if (c < -0.005) down++; else flat++;
       });
       return { up, down, flat };
     },
     rankList() {
-      return this.items.slice().sort((a, b) =>
+      return this.items.filter(it => !this.isReopen(it)).sort((a, b) =>
         this.rankTab === 'up'
           ? this.change(b) - this.change(a)
           : this.change(a) - this.change(b)
@@ -633,6 +640,11 @@ const vm = createApp({
       const avg = h.reduce((s, v) => s + v, 0) / h.length;
       if (!avg) return false;
       return (Math.max(...h) - Math.min(...h)) / avg < 0.015;
+    },
+
+    /* 季节性品种整月停报后重新上市（如藜蒿夏天无货），不能按周环比算暴涨 */
+    isReopen(it) {
+      return !!(it.prevObsAge && it.prevObsAge > 4);
     },
 
     /* ---------- 收藏（按名称存，数据每天刷新 id 会变） ---------- */

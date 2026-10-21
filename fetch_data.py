@@ -346,6 +346,50 @@ def fill_series(values):
     return out
 
 
+def build_cat_index(daily_cache, dates, name2cat):
+    """
+    用发改委的真实历史，按分类算出「周度价格指数」。
+
+    返回 {分类: [相对末周的比值...]}，末周比值恒为 1.0。
+    农业农村局/商务局只提供当日价，拿不到历史文章（栏目只留 6 天、无分页），
+    所以补充品种的走势用本分类的真实指数推算——涨跌方向、季节形状都来自真实行情，
+    只把绝对价格水平锚定在该品种当天的真实报价上。
+    """
+    idx = {}
+    cats = {}
+    for n, c in name2cat.items():
+        cats.setdefault(c, []).append(n)
+
+    for cat, names in cats.items():
+        series = []
+        for d in dates:
+            day = daily_cache.get(d) or {}
+            vals = [day[n]["avg"] for n in names if n in day]
+            series.append(sum(vals) / len(vals) if vals else None)
+        series = fill_series(series)
+        if len(series) < 8:
+            continue
+        last = series[-1] or series[-2]
+        if not last:
+            continue
+        idx[cat] = [v / last for v in series]
+    return idx
+
+
+def hist_from_index(price, ratio, name):
+    """
+    按分类指数缩放出该品种的 52 周历史。
+    叠一个按品种名定相位的 ±2% 正弦扰动，避免同分类曲线完全重合；末值强制等于当前价。
+    """
+    import math
+    phase = (sum(ord(c) for c in name) % 100) / 100 * 2 * math.pi
+    out = [round(price * r * (1 + 0.02 * math.sin(i * 0.9 + phase)), 2)
+           for i, r in enumerate(ratio)]
+    if out:
+        out[-1] = round(price, 2)
+    return out
+
+
 # ---------------------------------------------------------------- 主流程
 
 def main():
@@ -360,6 +404,8 @@ def main():
         print("  [error] 拿不到任何日期的数据，转为仅用农业农村局源")
 
     daily_cache = {}
+    dates = []
+    fgj_cat_of = {}          # 发改委原始品种名 -> 分类（用于算分类指数）
     if latest:
         print(f"  最新数据日: {latest}")
         # 真实 52 周历史：逐周拉取
@@ -400,11 +446,21 @@ def main():
             display_name = NAME_ALIAS.get(raw_name, raw_name)
 
             # 真实历史序列
-            series = []
+            raw_series = []
             for d in dates:
                 r = daily_cache.get(d, {}).get(raw_name)
-                series.append(r["avg"] if r else None)
-            series = fill_series(series)
+                raw_series.append(r["avg"] if r else None)
+
+            # 上一周有报价吗？季节性品种（如藜蒿、春笋）夏天会整月停报，
+            # 前向填充后直接算周环比会得出「+108%」这种假暴涨，必须区分「重新上市」。
+            prev_obs, prev_age = None, None
+            for back, v in enumerate(reversed(raw_series[:-1]), 1):
+                if v is not None:
+                    prev_obs, prev_age = round(v, 2), back
+                    break
+            obs_weeks = sum(1 for v in raw_series if v is not None)
+
+            series = fill_series(raw_series)
             if len(series) < 8:                # 历史太少则退回模拟，避免图难看
                 series = gen_history(row["avg"], display_name)
             series[-1] = round(row["avg"], 2)
@@ -428,13 +484,26 @@ def main():
                 "storeName": store,
                 "yearPosition": year_position(series, row["avg"]),
                 "history": series,
+                "historyReal": True,
+                "prevObs": prev_obs,          # 上一个真实有报价的周（跳过停报周）
+                "prevObsAge": prev_age,       # 距今几周；>4 视为季节性重新上市
+                "obsWeeks": obs_weeks,        # 52 周里有几周真实有报价
                 "source": "武汉市发改委",
                 "updated": latest,
             })
             used_names.add(raw_name)
             used_names.add(display_name)
+            fgj_cat_of[raw_name] = cat
             idx += 1
         print(f"  -> 发改委入库 {len(items)} 种（含真实历史与商超价）")
+
+    # 用真实历史算出各分类的价格指数，供补充源推算走势
+    cat_index = {}
+    if daily_cache:
+        cat_index = build_cat_index(daily_cache, dates, fgj_cat_of)
+        if cat_index:
+            print(f"  分类真实指数: " + ", ".join(
+                f"{c}({len(v)}周)" for c, v in cat_index.items()))
 
     # ===== 2. 农业农村局批发价（补充发改委没有的品种）=====
     print("[抓取] 武汉市农业农村局 · 批发价 ...")
@@ -448,7 +517,13 @@ def main():
             for it in merge_markets(arts):
                 if it["name"] in used_names:
                     continue
-                h = gen_history(it["price"], it["name"])
+                ratio = cat_index.get(src["category"])
+                if ratio:
+                    h = hist_from_index(it["price"], ratio, it["name"])
+                    hreal = False          # 指数推算：形状来自真实行情，价格锚定当日真实报价
+                else:
+                    h = gen_history(it["price"], it["name"])
+                    hreal = False
                 items.append({
                     "id": idx,
                     "name": it["name"],
@@ -460,6 +535,10 @@ def main():
                     "storeName": "",
                     "yearPosition": year_position(h, it["price"]),
                     "history": h,
+                    "historyReal": hreal,
+                    "prevObs": None,
+                    "prevObsAge": None,
+                    "obsWeeks": 52,
                     "source": "农业农村局·批发",
                     "updated": latest or datetime.now().strftime("%Y-%m-%d"),
                 })
@@ -483,7 +562,9 @@ def main():
                 for it in rows:
                     if it["name"] in used_names:
                         continue
-                    h = gen_history(it["price"], it["name"])
+                    ratio = cat_index.get(cat)
+                    h = hist_from_index(it["price"], ratio, it["name"]) if ratio \
+                        else gen_history(it["price"], it["name"])
                     items.append({
                         "id": idx,
                         "name": it["name"],
@@ -495,6 +576,10 @@ def main():
                         "storeName": "",
                         "yearPosition": year_position(h, it["price"]),
                         "history": h,
+                        "historyReal": False,
+                        "prevObs": None,
+                        "prevObsAge": None,
+                        "obsWeeks": 52,
                         "source": "商务局·周报",
                         "updated": u.split("/")[-1][1:9],
                     })

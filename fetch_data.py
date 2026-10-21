@@ -2,11 +2,13 @@
 """
 武汉菜篮子 - 数据抓取脚本
 =========================
-数据源：武汉市农业农村局「数据发布」栏目（每日更新，无需登录、无反爬）
-  - 蔬菜批发价格：四季美市场 + 白沙洲市场（每天各一篇）
-  - 粮油批发价格：白沙洲市场
-  - 水产品批发价格：白沙洲市场
-  注意：官网没有「肉禽蛋」栏目，该分类用内置模拟数据兜底。
+数据源（全部为政府官网公开数据，无需登录、无反爬）
+  武汉市农业农村局「数据发布」栏目（每日更新）
+    - 蔬菜批发价格：四季美市场 + 白沙洲市场（每天各一篇）
+    - 粮油批发价格：白沙洲市场
+    - 水产品批发价格：白沙洲市场
+  武汉市商务局「生活必需品市场价格监测」栏目（每周更新）
+    - 猪肉 / 牛羊肉 / 白条鸡 / 鸡蛋 / 部分水产品 —— 唯一提供肉禽蛋的官方源
 
 输出：data.json（与前端 MOCK_ITEMS 结构完全一致的数组）
 
@@ -26,7 +28,8 @@ import requests
 from bs4 import BeautifulSoup
 from pypinyin import lazy_pinyin, Style
 
-BASE = "https://nyncj.wuhan.gov.cn"
+BASE = "https://nyncj.wuhan.gov.cn"          # 武汉市农业农村局
+SW_BASE = "https://sw.wuhan.gov.cn"          # 武汉市商务局（生活必需品周报，含肉禽蛋）
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
@@ -40,6 +43,9 @@ SOURCES = [
     {"column": "/zwgk_25/fdzdgknr/snsj/scppfjg/", "category": "水产",   "take": 1},
     {"column": "/zwgk_25/fdzdgknr/snsj/lypfjg/",  "category": "米面粮油", "take": 1},
 ]
+
+# 武汉市商务局「生活必需品市场价格监测」周报：唯一提供肉禽蛋的官方源
+SW_SOURCE = {"column": "/zfxxgk/fdzdgknr/sjfb/jgjczb/", "take": 10}
 
 STORES = ["盒马", "小象超市"]
 
@@ -60,15 +66,15 @@ def get_soup(url):
     return BeautifulSoup(resp.text, "html.parser")
 
 
-def latest_article_urls(column_path, take):
+def latest_article_urls(column_path, take, base=BASE):
     """从栏目列表页提取最新 take 篇文章的绝对 URL。"""
-    list_url = urljoin(BASE, column_path)
+    list_url = urljoin(base, column_path)
     soup = get_soup(list_url)
     urls = []
     for a in soup.find_all("a", href=True):
         href = a["href"]
-        # 文章页形如 ./202610/t20261021_2865618.html
-        if re.search(r"\d{6}/t\d+_\d+\.html", href):
+        # 文章页形如 ./202610/t20261021_2865618.html 或 .shtml
+        if re.search(r"\d{6}/t\d+_\d+\.s?html?", href):
             urls.append(urljoin(list_url, href))
         if len(urls) >= take:
             break
@@ -165,6 +171,70 @@ def merge_markets(articles):
             for n, ps in bucket.items()]
 
 
+def parse_sw_weekly(article_url):
+    """
+    解析武汉市商务局「生活必需品市场监测」周报。
+    表格是分组结构（单格行表示分组），例如：
+        肉类（零售） / 猪肉 / 后腿肉 元/公斤 25.37 ...
+    返回 {"肉禽蛋": [...], "水产": [...]}，价格已换算成 元/500g。
+    """
+    soup = get_soup(article_url)
+    table = soup.find("table")
+    if not table:
+        return {}
+
+    GROUP_KEYS = ("粮食", "食用油", "肉类", "禽类", "蛋类",
+                  "奶制品", "调味品", "水产品", "蔬菜")
+
+    group, subgroup = "", ""
+    result = {"肉禽蛋": [], "水产": []}
+    seen = {"肉禽蛋": set(), "水产": set()}
+
+    for tr in table.find_all("tr"):
+        cells = [c.get_text(strip=True) for c in tr.find_all(["td", "th"])]
+        cells = [c for c in cells if c != ""]
+
+        # 单格行 = 分组标题
+        if len(cells) == 1:
+            txt = cells[0]
+            if any(k in txt for k in GROUP_KEYS):
+                group, subgroup = txt, ""
+            else:
+                subgroup = txt          # 如 猪肉 / 牛肉 / 羊肉 / 生猪
+            continue
+
+        # 数据行：名称, 单位, 本期价格, ...
+        if len(cells) < 3 or "元" not in cells[1]:
+            continue
+        name, unit, raw = cells[0], cells[1], cells[2]
+        if "-" in raw or not re.search(r"\d", raw):
+            continue                 # 空值（官网用 "-" 占位）
+        price = float(re.search(r"\d+(?:\.\d+)?", raw).group())
+        if "公斤" in unit:
+            price = price / 2        # 元/公斤 -> 元/500g
+
+        # 只取「零售」分组，跳过周报后半段的「批发」分组
+        if "零售" not in group:
+            continue
+
+        if group.startswith(("肉类", "禽类", "蛋类")):
+            cat = "肉禽蛋"
+            if group.startswith("肉类") and subgroup in ("猪肉", "牛肉", "羊肉") \
+                    and not name.startswith(subgroup[0]):
+                name = subgroup[0] + name     # 后腿肉 -> 猪后腿肉，牛腿肉保持
+        elif group.startswith("水产品"):
+            cat = "水产"
+        else:
+            continue
+
+        if name in seen[cat]:
+            continue
+        seen[cat].add(name)
+        result[cat].append({"name": name, "price": round(price, 2)})
+
+    return result
+
+
 # ---------------------------------------------------------------- 数据加工
 
 def pinyin_initials(name):
@@ -241,10 +311,43 @@ def main():
         except Exception as e:
             print(f"  [error] {src['category']} 抓取失败: {e}")
 
-    # 肉禽蛋：官网无此栏目，模拟补充
-    for m in POULTRY_MOCK:
-        all_items.append(build_item(idx, m["name"], "肉禽蛋", m["currentPrice"]))
-        idx += 1
+    # ---- 武汉市商务局周报：肉禽蛋 + 补全水产（大带鱼、大黄鱼等白沙洲没有的）----
+    # 部分期次正文为空（数据未渲染），因此从最新一期往前找，取第一篇有数据的
+    print("[抓取] 商务局周报（肉禽蛋）...")
+    poultry_ok = False
+    try:
+        sw_urls = latest_article_urls(SW_SOURCE["column"], SW_SOURCE["take"], base=SW_BASE)
+        for u in sw_urls:
+            sw = parse_sw_weekly(u)
+            if not sw.get("肉禽蛋"):
+                print(f"  {u.split('/')[-1]} 无有效数据，继续往前找")
+                continue
+            print(f"  采用: {u.split('/')[-1]}")
+            for it in sw["肉禽蛋"]:
+                all_items.append(build_item(idx, it["name"], "肉禽蛋", it["price"]))
+                idx += 1
+            # 水产：只补已有列表里没有的品种，避免和批发价重复
+            exist = {it["name"] for it in all_items}
+            added = 0
+            for it in sw.get("水产", []):
+                if it["name"] not in exist:
+                    all_items.append(build_item(idx, it["name"], "水产", it["price"]))
+                    idx += 1
+                    added += 1
+            print(f"  -> 肉禽蛋 {len(sw['肉禽蛋'])} 种，新增水产 {added} 种")
+            poultry_ok = True
+            break
+        if not sw_urls:
+            print("  [warn] 列表页没找到周报")
+    except Exception as e:
+        print(f"  [error] 商务局周报抓取失败: {e}")
+
+    # 兜底：商务局抓不到时，用内置模拟数据保证分类不为空
+    if not poultry_ok:
+        print("  [warn] 使用内置模拟数据兜底肉禽蛋")
+        for m in POULTRY_MOCK:
+            all_items.append(build_item(idx, m["name"], "肉禽蛋", m["currentPrice"]))
+            idx += 1
 
     if not all_items:
         print("[fatal] 什么数据都没抓到，不生成 data.json（避免覆盖旧文件）")

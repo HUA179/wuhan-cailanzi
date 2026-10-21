@@ -17,15 +17,24 @@
 
 ③ 武汉市商务局「生活必需品市场监测」周报（补充肉禽蛋细类）
 
-输出：data.json（与前端结构一致，另加 source / updated 字段）
+输出：data.json（与前端结构一致，另加 source / updated / historyReal 等字段）
 
-运行：
-    python fetch_data.py
+运行（动静分离）：
+    python fetch_data.py --mode=full    # 全量：回溯 52 周真实历史。历史是死数据，
+                                        # 只在需要补历史/换季新品种时本地手动跑
+    python fetch_data.py --mode=daily   # 增量：只抓今天一个截面，追加到 52 周末尾、
+                                        # 淘汰最老一周、重算百分位。默认模式，
+                                        # 请求数个位数，云端 Actions 每天跑这个
+
+为什么要分两种：GitHub 的机器在境外，跨国访问武汉发改委的政务网（裸 IP:7600）
+极不稳定，52 个历史日期并发去拉必然超时。历史数据本身不会变，每天重爬纯属浪费。
+
 依赖：
     pip install requests beautifulsoup4 pypinyin
 """
 
 import json
+import os
 import random
 import re
 import sys
@@ -55,6 +64,7 @@ TIMEOUT = 15                   # 单次请求超时（境外跑 Actions 时政�
 RETRY = 2                      # 重试次数
 MAX_WORKERS = 6                # 历史日期并发数（串行 52 周在境外机器上要跑十几分钟）
 WEEKS = 52                    # 走势图窗口
+DATA_FILE = "data.json"
 
 # 农业农村局栏目：column -> (前端分类, 抓最新几篇)
 NYNCJ_SOURCES = [
@@ -422,7 +432,8 @@ def hist_from_index(price, ratio, name):
 
 # ---------------------------------------------------------------- 主流程
 
-def main():
+def full_fetch():
+    """全量抓取：回溯 52 周真实历史 + 全量品种。本地手动跑，一天一次都嫌多。"""
     items = []
     used_names = set()
     idx = 1
@@ -506,6 +517,7 @@ def main():
             items.append({
                 "id": idx,
                 "name": display_name,
+                "rawName": raw_name,          # 数据源原始叫法，daily 模式靠它对上号
                 "pinyin": pinyin_initials(display_name),
                 "category": cat,
                 "unit": "500g",
@@ -557,6 +569,7 @@ def main():
                 items.append({
                     "id": idx,
                     "name": it["name"],
+                    "rawName": it["name"],
                     "pinyin": pinyin_initials(it["name"]),
                     "category": src["category"],
                     "unit": "500g",
@@ -598,6 +611,7 @@ def main():
                     items.append({
                         "id": idx,
                         "name": it["name"],
+                        "rawName": it["name"],
                         "pinyin": pinyin_initials(it["name"]),
                         "category": cat,
                         "unit": "500g",
@@ -621,26 +635,289 @@ def main():
     except Exception as e:
         print(f"  [error] 商务局周报失败: {e}")
 
+    # 发改委不可达时（GitHub 机器连不上裸 IP，是常态而非故障），
+    # 把上一份 data.json 里的发改委品种原样继承过来，
+    # 避免一次「降级成功」的全量把真实 52 周历史和商超价整体冲掉。
+    if not any(it.get("source") == "武汉市发改委" for it in items):
+        kept = restore_fgj_items(items)
+        if kept:
+            print(f"  [保底] 发改委不可达，从旧 {DATA_FILE} 继承 {kept} 个品种（含真实历史/商超价）")
+
     if not items:
         print("[fatal] 所有数据源都失败，不覆盖 data.json")
         sys.exit(1)
 
-    # 默认列表顺序：蔬菜 → 肉禽蛋 → 水产 → 米面粮油 → 豆制品（米面常年不动，放前面看不出行情）
+    save_items(items, tag="全量")
+
+
+# ---------------------------------------------------------------- 每日增量
+
+# 前端显示名 -> 发改委原始名（老 data.json 没有 rawName 字段时用它反查）
+REV_ALIAS = {v: k for k, v in NAME_ALIAS.items()}
+
+
+def item_key(it):
+    """品种的稳定标识：优先 rawName，老数据用别名反查，最后退回显示名。"""
+    return it.get("rawName") or REV_ALIAS.get(it.get("name", ""), it.get("name", ""))
+
+
+def restore_fgj_items(items):
+    """发改委抓不到时，从旧 data.json 继承发改委品种（保住真实历史与商超价）。"""
+    if not os.path.exists(DATA_FILE):
+        return 0
+    try:
+        with open(DATA_FILE, encoding="utf-8") as f:
+            old = json.load(f)
+    except Exception:
+        return 0
+    have = {item_key(it) for it in items}
+    n = 0
+    for it in old:
+        if it.get("source") != "武汉市发改委":
+            continue
+        k = item_key(it)
+        if k in have:
+            continue
+        items.append(it)
+        have.add(k)
+        n += 1
+    return n
+
+
+def save_items(items, tag=""):
+    """统一出口：排序 + 重编号 + 落盘。"""
     CAT_ORDER = {"蔬菜": 0, "肉禽蛋": 1, "水产": 2, "米面粮油": 3, "豆制品": 4}
     items.sort(key=lambda x: (CAT_ORDER.get(x["category"], 9), x["id"]))
     for i, it in enumerate(items, 1):
         it["id"] = i
 
-    with open("data.json", "w", encoding="utf-8") as f:
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
     stats = {}
     for it in items:
         stats[it["category"]] = stats.get(it["category"], 0) + 1
-    real_hist = sum(1 for it in items if it.get("source") == "武汉市发改委")
+    real_hist = sum(1 for it in items if it.get("historyReal"))
     with_sp = sum(1 for it in items if it.get("supermarketPrice"))
-    print(f"\n[完成] {len(items)} 个品种 | 分类: {stats}")
-    print(f"       真实历史走势: {real_hist} 种 | 真实商超价: {with_sp} 种")
+    print(f"\n[完成{('·' + tag) if tag else ''}] {len(items)} 个品种 | 分类: {stats}")
+    print(f"       真实历史: {real_hist} 种 | 真实商超价: {with_sp} 种")
+
+
+def append_price(it, price, date_str, gap_weeks=1):
+    """
+    把今天的新价追加进 52 周序列，淘汰最老的一周，重算百分位。
+    - 同一天重复跑（手动触发两次）不会产生重复点，只覆盖最后一位
+    - 历史为空 / 不足 52 周时自动补齐，绝不抛异常
+    返回 True 表示已更新，False 表示被健康检查拦下。
+    """
+    try:
+        price = round(float(price), 2)
+    except (TypeError, ValueError):
+        return False
+    if not price or price <= 0 or price > 10000:
+        return False
+
+    h = [v for v in (it.get("history") or []) if isinstance(v, (int, float))]
+    old = h[-1] if h else None
+
+    # -------- 健康检查：无征兆的暴涨/暴跌一律跳过，保留旧数据 --------
+    if old and not price_sane(old, price, gap_weeks):
+        print(f"  [skip] {it.get('name')} 价格异常 {old} → {price}"
+              f"（{price / old * 100:.0f}%），保留旧值")
+        return False
+
+    if it.get("updated") == date_str and h:
+        h[-1] = price                      # 同日重跑：覆盖，不追加
+    else:
+        # 历史不足 52 周时用最早值向前补齐，保证图表和百分位口径一致
+        while len(h) < WEEKS - 1:
+            h.insert(0, h[0] if h else price)
+        h.append(price)
+        if len(h) > WEEKS:
+            h = h[-WEEKS:]
+
+    it["history"] = h
+    it["currentPrice"] = price
+    it["yearPosition"] = year_position(h, price)
+    it["updated"] = date_str
+
+    if it.get("source") == "武汉市发改委":
+        it["historyReal"] = True
+        it["prevObs"] = h[-2] if len(h) > 1 else None
+        it["prevObsAge"] = gap_weeks
+        it["obsWeeks"] = min(WEEKS, (it.get("obsWeeks") or 0) + 1)
+    return True
+
+
+def price_sane(old, new, gap_weeks):
+    """
+    价格合理性闸门。日涨跌超过 +120% / -55% 且不是长期停报后复出，判定为脏数据。
+    季节性品种（藜蒿夏天整月无报价）gap_weeks 会很大，属于正常跳变，放行。
+    """
+    if not old or old <= 0:
+        return True
+    ratio = new / old
+    if gap_weeks > 3:               # 停报超过 3 周再出现，价格跳变合理
+        return True
+    return 0.45 <= ratio <= 2.2
+
+
+def weeks_since(date_str):
+    """距今天几周（解析失败按 0 处理，不影响主流程）。"""
+    try:
+        return max(0, (datetime.now() - datetime.strptime(date_str, "%Y-%m-%d")).days / 7)
+    except Exception:
+        return 0
+
+
+def daily_update():
+    """
+    每日增量：只抓「今天」一个截面，追加到现有 data.json，不发任何历史请求。
+    云端 Actions 每天跑这个，请求数个位数，几秒结束。
+    """
+    if not os.path.exists(DATA_FILE):
+        print(f"[warn] 没有 {DATA_FILE}，自动转为全量抓取 ...")
+        return full_fetch()
+
+    with open(DATA_FILE, encoding="utf-8") as f:
+        items = json.load(f)
+    print(f"[增量] 读入 {len(items)} 个品种（现有历史 {len(items[0].get('history') or [])} 周）")
+
+    # 按数据源分开索引，绝不能混：农业局的「花菜」是批发价 1.5，
+    # 发改委的「花菜」是零售价 3.97，混用会把零售价写成批发价（还触发健康检查）。
+    index_fgj = {item_key(it): it for it in items
+                 if it.get("source") == "武汉市发改委"}
+    index_supp = {item_key(it): it for it in items
+                  if it.get("source") != "武汉市发改委"}
+    updated = 0
+
+    # -------- 1. 发改委今日零售价（1 次请求，不通就跳过）--------
+    print("[抓取] 发改委 · 今日 ...")
+    latest = None
+    today = None
+    # 先花 8 秒探一下。境外机器连发改委裸 IP 必超时，探不通就整段跳过，
+    # 否则要白等 3 次重试 × 15 秒。
+    try:
+        if fgj_reachable():
+            latest = fgj_latest_date()
+            today = fgj_daily(latest) if latest else None
+        else:
+            print("  [warn] 发改委不可达（境外服务器常态），跳过探测")
+    except Exception as e:
+        print(f"  [error] 发改委异常: {type(e).__name__}")
+
+    if today:
+        print(f"  数据日: {latest}（{len(today)} 个品种）")
+        miss = []
+        for raw_name, row in today.items():
+            if not row or not row.get("avg"):
+                continue
+            if "桶" in row["unit"] or "升" in row["unit"]:
+                continue
+            it = index_fgj.get(raw_name)
+            if not it:
+                miss.append(raw_name)      # 新品种需要全量模式补历史
+                continue
+            gap = weeks_since(it.get("updated") or "")
+            if append_price(it, row["avg"], latest, gap_weeks=max(1, gap)):
+                updated += 1
+
+        # 真实商超价（2 个监测点，2 次请求）
+        try:
+            for p in fgj_supermarkets()[:2]:
+                prices = fgj_point_prices(p["id"], latest)
+                for raw_name, price in prices.items():
+                    it = index_fgj.get(raw_name)
+                    if it and price:
+                        it["supermarketPrice"] = round(float(price), 2)
+                        it["storeName"] = p["name"]
+                print(f"  商超 {p['name']}: {len(prices)} 个品种")
+        except Exception as e:
+            print(f"  [error] 商超价: {type(e).__name__}")
+
+        if miss:
+            print(f"  [提示] {len(miss)} 个新品种未入库（如 {', '.join(miss[:3])}），需 --mode=full 补历史")
+    else:
+        # GitHub 的机器连不上发改委裸 IP（实测 ConnectTimeout），这是常态不是故障。
+        # 此时发改委那 40 个品种原样保留：价格、历史、商超价、updated 日期都不动，
+        # 前端会显示该品种的更新时间偏旧，属于如实反映。
+        print("  [warn] 发改委今日不可达（境外服务器常态），该部分品种保留上次数据")
+
+    if not latest:
+        latest = datetime.now().strftime("%Y-%m-%d")
+
+    # -------- 2. 农业局批发价（3 个栏目 × 最新 1 篇）--------
+    print("[抓取] 农业农村局 · 今日批发价 ...")
+    for src in NYNCJ_SOURCES:
+        try:
+            urls = latest_article_urls(src["column"], 1)
+            if not urls:
+                continue
+            arts = [parse_price_table(u) for u in urls]
+            n = 0
+            for it_new in merge_markets(arts):
+                it = index_supp.get(it_new["name"])
+                if not it:
+                    continue
+                gap = weeks_since(it.get("updated") or "")
+                if append_price(it, it_new["price"], latest, gap_weeks=max(1, gap)):
+                    n += 1
+            updated += n
+            print(f"  {src['category']}: 更新 {n} 种")
+        except Exception as e:
+            print(f"  [error] {src['category']}: {type(e).__name__}")
+
+    # -------- 3. 商务局周报（往前找最多 3 篇有数据的，最新几期常是空正文）--------
+    print("[抓取] 商务局 · 最新周报 ...")
+    try:
+        for u in latest_article_urls(SW_SOURCE["column"], 6, base=SW_BASE):
+            sw = parse_sw_weekly(u)
+            if not sw.get("肉禽蛋"):
+                continue
+            n = 0
+            wdate = u.split("/")[-1][1:9]
+            wdate = f"{wdate[:4]}-{wdate[4:6]}-{wdate[6:8]}" if len(wdate) == 8 else latest
+            for cat, rows in sw.items():
+                for it_new in rows:
+                    it = index_supp.get(it_new["name"])
+                    if not it:
+                        continue
+                    gap = weeks_since(it.get("updated") or "")
+                    if append_price(it, it_new["price"], wdate, gap_weeks=max(1, gap)):
+                        n += 1
+            updated += n
+            print(f"  周报更新 {n} 种")
+            break
+    except Exception as e:
+        print(f"  [error] 周报: {type(e).__name__}")
+
+    if updated == 0:
+        print("[warn] 本次没有任何品种更新，保留原 data.json 不动")
+        return
+
+    save_items(items, tag="增量")
+    print(f"       本次更新 {updated} 个价格点")
+
+
+def main():
+    mode = "daily"
+    for a in sys.argv[1:]:
+        if a.startswith("--mode="):
+            mode = a.split("=", 1)[1].strip()
+        elif a in ("--full", "-f"):
+            mode = "full"
+        elif a in ("--daily", "-d"):
+            mode = "daily"
+
+    if mode not in ("daily", "full"):
+        print(f"[error] 未知模式 {mode}，可选 daily / full")
+        sys.exit(2)
+
+    print(f"===== 武汉菜篮子 · {mode} 模式 =====")
+    if mode == "full":
+        full_fetch()
+    else:
+        daily_update()
 
 
 if __name__ == "__main__":

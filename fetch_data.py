@@ -1,33 +1,35 @@
 # -*- coding: utf-8 -*-
 """
-武汉菜篮子 - 数据抓取脚本（多源版）
-===================================
-数据源（全部为政府公开数据，无需登录）
+菜篮子 - 数据抓取脚本（多源版 · 城市可配置）
+=============================================
+主城市：武汉（湖北）—— 见 cities/wuhan.py
 
-① 武汉市发改委「价格监测平台」每日价格（主源，每日更新）
-   http://58.48.136.167:7600/comparePrice 背后的 JSON 接口
-   - queryJBSJData?date=YYYY-MM-DD  → 43 个品种的最高/最低/平均价（元/500克）
-   - queryPointList?areaCode=420100 → 28 个监测点（7 家超市 + 集贸市场）
-   - queryDataForPoint?pointId=&date= → 单个门店的逐品价格（真实商超价）
-   ✅ 支持查询历史日期（回溯一年），因此 52 周走势是**真实历史**，不是模拟
+数据源分两类：
 
-② 武汉市农业农村局「数据发布」（补充品种，每日更新）
-   蔬菜批发价（四季美+白沙洲）、水产品批发价、粮油批发价
-   → 补足发改委清单里没有的品种（如西洋芹、茼蒿、甲鱼…）
+【本地源】由城市配置决定站点参数（cities/<id>.py 里的 fgj / nyncj / sw 字段）
+  ① 市发改委「价格监测平台」每日零售价（主源，支持回溯真实历史）
+  ② 市农业农村局 批发价（补品种）
+  ③ 市商务局 生活必需品周报（补肉禽蛋细类）
 
-③ 武汉市商务局「生活必需品市场监测」周报（补充肉禽蛋细类）
+【参考源】全国口径，与城市无关（sources/ 下）
+  ④ 农业农村部「全国农产品批发市场价格信息系统」
+     周报 246 期（分品种水果，元/公斤）+ 日报 1369 期（全国均价基准）
+     → source = "全国参考"
+  ⑤ 北京新发地 分品种水果批发价（元/斤，×2 转元/公斤）
+     → source = "新发地·批发"
+     补上官方 6 种水果里没有的「橘子」
 
-输出：data.json（与前端结构一致，另加 source / updated / historyReal 等字段）
+输出：data.json（与前端结构一致，含 source / unit / region /
+      historyDates / historyKind / historyReal 等字段）
 
-运行（动静分离）：
-    python fetch_data.py --mode=full    # 全量：回溯 52 周真实历史。历史是死数据，
-                                        # 只在需要补历史/换季新品种时本地手动跑
-    python fetch_data.py --mode=daily   # 增量：只抓今天一个截面，追加到 52 周末尾、
-                                        # 淘汰最老一周、重算百分位。默认模式，
-                                        # 请求数个位数，云端 Actions 每天跑这个
+运行：
+    python fetch_data.py --mode=full    # 全量：回溯 52 周真实历史（历史是死数据，
+                                        # 只在补历史/换季新品种时跑）
+    python fetch_data.py --mode=daily   # 增量：只抓今天一个截面，请求数个位数
+    python fetch_data.py --city=wuhan   # 选城市（默认读环境变量 CAILANZI_CITY，再退回武汉）
 
-为什么要分两种：GitHub 的机器在境外，跨国访问武汉发改委的政务网（裸 IP:7600）
-极不稳定，52 个历史日期并发去拉必然超时。历史数据本身不会变，每天重爬纯属浪费。
+为什么分两种：本地政务网对境外/异地机器极不稳定，52 个历史日期并发去拉必然超时。
+历史数据本身不会变，每天重爬纯属浪费。
 
 依赖：
     pip install requests beautifulsoup4 pypinyin
@@ -46,49 +48,60 @@ import requests
 from bs4 import BeautifulSoup
 from pypinyin import lazy_pinyin, Style
 
-# ---------------------------------------------------------------- 配置
+from cities import CATEGORY_ORDER, load_city
+from sources import agri_national, xinfadi
 
-FGJ_API = "http://58.48.136.167:7600/prod-api"
-FGJ_REFERER = "http://58.48.136.167:7600/comparePrice"
-AREA_CODE = "420100"          # 武汉市
+# ---------------------------------------------------------------- 城市配置
 
-NYNCJ_BASE = "https://nyncj.wuhan.gov.cn"
-SW_BASE = "https://sw.wuhan.gov.cn"
+CITY = {}
+FGJ_API = ""
+FGJ_REFERER = ""
+LOCAL_SOURCE_NAME = ""
+AREA_CODE = ""
+NYNCJ_BASE = ""
+SW_BASE = ""
+NYNCJ_SOURCES = []
+SW_SOURCE = None
+FGJ_CATEGORY = {}
+NAME_ALIAS = {}
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 }
-TIMEOUT = 15                   # 单次请求超时（境外跑 Actions 时政务网偶有丢包，超过 15s 基本没救）
+TIMEOUT = 15                   # 单次请求超时（异地机器访问政务网偶有丢包，超过 15s 基本没救）
 RETRY = 2                      # 重试次数
-MAX_WORKERS = 6                # 历史日期并发数（串行 52 周在境外机器上要跑十几分钟）
-WEEKS = 52                    # 走势图窗口
+MAX_WORKERS = 6                # 历史日期并发数（串行 52 周在异地机器上要跑十几分钟）
+WEEKS = 52                     # 走势图窗口
 DATA_FILE = "data.json"
 
-# 农业农村局栏目：column -> (前端分类, 抓最新几篇)
-NYNCJ_SOURCES = [
-    {"column": "/zwgk_25/fdzdgknr/snsj/scpfjg/", "category": "蔬菜",   "take": 2},
-    {"column": "/zwgk_25/fdzdgknr/snsj/scppfjg/", "category": "水产",   "take": 1},
-    {"column": "/zwgk_25/fdzdgknr/snsj/lypfjg/",  "category": "米面粮油", "take": 1},
-]
-SW_SOURCE = {"column": "/zfxxgk/fdzdgknr/sjfb/jgjczb/", "take": 10}
 
-# 发改委品种 -> 前端分类
-FGJ_CATEGORY = {
-    "米面粮油": ["中籼米", "早籼米", "晚粳米", "特一粉", "食盐"],
-    "肉禽蛋": ["猪排骨", "猪精瘦肉", "猪腿夹肉", "白条鸡", "白条鸭",
-               "良种鸡蛋", "鲜牛肉", "鲜羊肉"],
-    "水产": ["胖头鱼", "草鱼", "鲫鱼", "鳊鱼"],
-    "豆制品": ["豆腐", "千张", "干子"],
-}
-# 名字归一（发改委叫法 -> 更通用的叫法）
-NAME_ALIAS = {
-    "良种鸡蛋": "鸡蛋",
-    "鲜牛肉": "牛肉",
-    "鲜羊肉": "羊肉",
-    "胖头鱼": "花鲢（胖头鱼）",
-    "猪腿夹肉": "猪腿夹肉",
-}
+def configure(city_id=None):
+    """
+    载入城市配置，把站点参数铺到模块级变量。
+
+    所有抓取函数只在**调用时**读这些变量，所以这里改一次就全流程生效，
+    main() 的 --city 参数靠它切换，其他代码一行不用改。
+    """
+    global CITY, FGJ_API, FGJ_REFERER, LOCAL_SOURCE_NAME, AREA_CODE
+    global NYNCJ_BASE, SW_BASE, NYNCJ_SOURCES, SW_SOURCE, FGJ_CATEGORY, NAME_ALIAS
+
+    CITY = load_city(city_id)
+    fgj = CITY.get("fgj") or {}
+    FGJ_API = fgj.get("api") or ""
+    FGJ_REFERER = fgj.get("referer") or ""
+    LOCAL_SOURCE_NAME = fgj.get("source_name") or "本地价格监测"
+    AREA_CODE = CITY.get("area_code") or ""
+    NYNCJ_BASE = CITY.get("nyncj_base") or ""
+    SW_BASE = CITY.get("sw_base") or ""
+    NYNCJ_SOURCES = CITY.get("nyncj_sources") or []
+    SW_SOURCE = CITY.get("sw_source")
+    FGJ_CATEGORY = CITY.get("category_map") or {}
+    NAME_ALIAS = CITY.get("name_alias") or {}
+    return CITY
+
+
+configure(os.environ.get("CAILANZI_CITY"))
 
 _local = threading.local()
 
@@ -98,8 +111,9 @@ def _sess():
     s = getattr(_local, "s", None)
     if s is None:
         s = requests.Session()
-        s.headers.update({"User-Agent": HEADERS["User-Agent"], "Referer": FGJ_REFERER})
         _local.s = s
+    # Referer 每次刷新：城市配置可能在本进程内被 configure() 换掉
+    s.headers.update({"User-Agent": HEADERS["User-Agent"], "Referer": FGJ_REFERER})
     return s
 
 
@@ -489,6 +503,140 @@ def hist_from_index(price, ratio):
     return out
 
 
+# ---------------------------------------------------------------- 参考源（全国口径）
+
+# 参考源元信息：source 字段 → 明细/区域/粒度
+REF_SOURCES = {
+    "全国参考": {
+        "detail": "农业农村部 · 全国农产品批发市场价格信息系统",
+        "region": "national",
+        "granularity": "weekly",
+        "data_level": "official",
+    },
+    "新发地·批发": {
+        "detail": "北京新发地农产品批发市场 · 分品种日价",
+        "region": "beijing",
+        "granularity": "daily",
+        "data_level": "official",
+    },
+}
+
+
+def prev_obs_of(series):
+    """序列末尾之前，最近一个真实观测值及其距今周数。"""
+    for back, v in enumerate(reversed((series or [])[:-1]), 1):
+        if v is not None:
+            return round(float(v), 2), back
+    return None, None
+
+
+def build_ref_items(result, source):
+    """
+    把 sources.*.collect() 的结果转成 data.json 的 item 列表。
+
+    丢数据的三种情况，都按「不入库」处理，绝不补值：
+        · 整条序列一个真实报价都没有（obs == 0）
+        · 现价取不到（末位 None 且前面也全空）
+    """
+    meta = REF_SOURCES[source]
+    dates = result.get("dates") or []
+    latest = result.get("latest")
+    out = []
+
+    for name, info in (result.get("series") or {}).items():
+        values = norm_history(info.get("values"), len(dates))
+        obs = sum(1 for v in values if v is not None)
+        if obs == 0 or not dates:
+            continue
+
+        cur, updated = values[-1], latest
+        if cur is None:
+            # 本周官方还没发（或该点落在停更窗口）→ 用最近一次真实报价，
+            # updated 跟着挪到那天，前端「数据截至」会如实显示旧日期
+            last_i = max(i for i, v in enumerate(values) if v is not None)
+            cur, updated = values[last_i], dates[last_i]
+
+        prev, age = prev_obs_of(values)
+        out.append({
+            "id": 0,                                   # 由 save_items 统一重排
+            "name": name,
+            "rawName": name,
+            "pinyin": pinyin_initials(name),
+            "category": info.get("category") or "水果",
+            "unit": "kg",
+            "unitLabel": "元/公斤",
+            "currentPrice": round(float(cur), 2),
+            "supermarketPrice": None,                  # 批发/全国口径没有商超价
+            "storeName": "",
+            "yearPosition": year_position(values, cur),
+            "history": values,
+            "historyDates": dates,
+            "historyKind": "real",
+            "historyReal": True,
+            "prevObs": prev,
+            "prevObsAge": age,
+            "obsWeeks": obs,
+            "source": source,
+            "sourceDetail": meta["detail"],
+            "region": meta["region"],
+            "granularity": meta["granularity"],
+            "dataLevel": meta["data_level"],
+            "updated": updated,
+        })
+    return out
+
+
+def add_reference(items, idx):
+    """
+    追加「全国参考」和「新发地·批发」两组品种。返回 (items, idx)。
+
+    两组源都是全国/北京口径，与城市无关，所以开关写在城市配置里
+    （use_national / use_xinfadi），换城市不用改这里。
+    """
+    have = {it.get("name") for it in items}
+
+    if CITY.get("use_national"):
+        print("[抓取] 农业农村部 · 全国参考（周报+日报）...")
+        try:
+            res = agri_national.collect(weeks=CITY.get("fruit_weeks", WEEKS))
+            got = [it for it in build_ref_items(res, "全国参考") if it["name"] not in have]
+            for it in got:
+                it["id"] = idx
+                idx += 1
+            items.extend(got)
+            have.update(it["name"] for it in got)
+            st = res.get("stats") or {}
+            span = st.get("weekly_span") or ("-", "-")
+            print("  -> 入库 %d 种 | 周报 %d 期（表5 解析成功 %d 期，%s~%s）| 日报 %d 期"
+                  % (len(got), st.get("weekly_issues", 0), st.get("weekly_parsed", 0),
+                     span[0], span[1], st.get("daily_rows", 0)))
+        except Exception as e:
+            print("  [error] 全国参考失败: %s: %s" % (type(e).__name__, e))
+
+    if CITY.get("use_xinfadi"):
+        print("[抓取] 北京新发地 · 水果分品种日价 ...")
+        try:
+            res = xinfadi.collect(weeks=CITY.get("fruit_weeks", WEEKS))
+            got = [it for it in build_ref_items(res, "新发地·批发") if it["name"] not in have]
+            for it in got:
+                it["id"] = idx
+                idx += 1
+            items.extend(got)
+            have.update(it["name"] for it in got)
+            st = res.get("stats") or {}
+            print("  -> 入库 %d 种 | 52 周命中 %d 周"
+                  % (len(got), st.get("weeks_hit", 0)))
+            unm = st.get("unmapped") or []
+            if unm:
+                print("     未映射品种（不计入，仅备查）: %s%s"
+                      % ("、".join("%s×%d" % (n, c) for n, c in unm[:8]),
+                         " 等 %d 个" % len(unm) if len(unm) > 8 else ""))
+        except Exception as e:
+            print("  [error] 新发地失败: %s: %s" % (type(e).__name__, e))
+
+    return items, idx
+
+
 # ---------------------------------------------------------------- 主流程
 
 def full_fetch():
@@ -498,7 +646,7 @@ def full_fetch():
     idx = 1
 
     # ===== 1. 发改委每日价格（主源，含真实历史与商超价）=====
-    print("[抓取] 武汉市发改委 · 每日价格 ...")
+    print("[抓取] %s · 每日价格 ..." % CITY.get("name", ""))
     latest = fgj_latest_date()
     if not latest:
         print("  [error] 拿不到任何日期的数据，转为仅用农业农村局源")
@@ -587,7 +735,7 @@ def full_fetch():
                 "prevObs": prev_obs,          # 上一个真实有报价的周（跳过停报周）
                 "prevObsAge": prev_age,       # 距今几周；>4 视为季节性重新上市
                 "obsWeeks": obs_weeks,        # 52 周里有几周真实有报价
-                "source": "武汉市发改委",
+                "source": LOCAL_SOURCE_NAME,
                 "updated": latest,
             })
             used_names.add(raw_name)
@@ -702,10 +850,14 @@ def full_fetch():
     except Exception as e:
         print(f"  [error] 商务局周报失败: {e}")
 
+    # ===== 4. 参考源：全国口径（水果 + 全国均价基准）=====
+    # 放在本地源之后：重名时以本地实测为准（本地零售口径更贴近菜篮子）
+    items, idx = add_reference(items, idx)
+
     # 发改委不可达时（GitHub 机器连不上裸 IP，是常态而非故障），
     # 把上一份 data.json 里的发改委品种原样继承过来，
     # 避免一次「降级成功」的全量把真实 52 周历史和商超价整体冲掉。
-    if not any(it.get("source") == "武汉市发改委" for it in items):
+    if not any(it.get("source") == LOCAL_SOURCE_NAME for it in items):
         kept = restore_fgj_items(items)
         if kept:
             print(f"  [保底] 发改委不可达，从旧 {DATA_FILE} 继承 {kept} 个品种（含真实历史/商超价）")
@@ -719,13 +871,15 @@ def full_fetch():
 
 # ---------------------------------------------------------------- 每日增量
 
-# 前端显示名 -> 发改委原始名（老 data.json 没有 rawName 字段时用它反查）
-REV_ALIAS = {v: k for k, v in NAME_ALIAS.items()}
+
+def rev_alias():
+    """前端显示名 -> 原始名的反查表。名字归一随城市配置变，所以每次现算。"""
+    return {v: k for k, v in NAME_ALIAS.items()}
 
 
 def item_key(it):
     """品种的稳定标识：优先 rawName，老数据用别名反查，最后退回显示名。"""
-    return it.get("rawName") or REV_ALIAS.get(it.get("name", ""), it.get("name", ""))
+    return it.get("rawName") or rev_alias().get(it.get("name", ""), it.get("name", ""))
 
 
 def restore_fgj_items(items):
@@ -740,7 +894,7 @@ def restore_fgj_items(items):
     have = {item_key(it) for it in items}
     n = 0
     for it in old:
-        if it.get("source") != "武汉市发改委":
+        if it.get("source") != LOCAL_SOURCE_NAME:
             continue
         k = item_key(it)
         if k in have:
@@ -777,7 +931,7 @@ def finalize_history(items):
 
 def save_items(items, tag=""):
     """统一出口：排序 + 重编号 + 落盘。"""
-    CAT_ORDER = {"蔬菜": 0, "肉禽蛋": 1, "水产": 2, "米面粮油": 3, "豆制品": 4}
+    CAT_ORDER = {c: i for i, c in enumerate(CATEGORY_ORDER)}
     items.sort(key=lambda x: (CAT_ORDER.get(x["category"], 9), x["id"]))
     for i, it in enumerate(items, 1):
         it["id"] = i
@@ -843,7 +997,7 @@ def append_price(it, price, date_str, gap_weeks=1):
     it["yearPosition"] = year_position(h, price)
     it["updated"] = date_str
 
-    if it.get("source") == "武汉市发改委":
+    if it.get("source") == LOCAL_SOURCE_NAME:
         it["historyReal"] = True
         it["historyKind"] = "real"
         # 上一周真实有报价的值（跳过停报周留下的 None）
@@ -890,9 +1044,9 @@ def daily_update():
     # 按数据源分开索引，绝不能混：农业局的「花菜」是批发价 1.5，
     # 发改委的「花菜」是零售价 3.97，混用会把零售价写成批发价（还触发健康检查）。
     index_fgj = {item_key(it): it for it in items
-                 if it.get("source") == "武汉市发改委"}
+                 if it.get("source") == LOCAL_SOURCE_NAME}
     index_supp = {item_key(it): it for it in items
-                  if it.get("source") != "武汉市发改委"}
+                  if it.get("source") != LOCAL_SOURCE_NAME}
     updated = 0
 
     # -------- 1. 发改委今日零售价（1 次请求，不通就跳过）--------
@@ -1000,6 +1154,12 @@ def daily_update():
     except Exception as e:
         print(f"  [error] 周报: {type(e).__name__}")
 
+    # -------- 4. 参考源：全国口径（周报/日报 + 新发地）--------
+    try:
+        updated += refresh_reference(items)
+    except Exception as e:
+        print(f"  [error] 参考源: {type(e).__name__}")
+
     if updated == 0:
         print("[warn] 本次没有任何品种更新，保留原 data.json 不动")
         return
@@ -1008,11 +1168,79 @@ def daily_update():
     print(f"       本次更新 {updated} 个价格点")
 
 
+def refresh_reference(items):
+    """
+    增量模式下刷新参考源：只取最新一期周报 / 最新一天日价，追加到序列末尾。
+
+    不做 52 周回溯（那是 full 模式的事），请求数控制在个位数，
+    本地政务网挂了也不影响参考源照样更新。
+    """
+    ref = [it for it in items if it.get("source") in REF_SOURCES]
+    if not ref:
+        print("[参考] 现有 data.json 里没有参考源品种，跳过（跑 --mode=full 补）")
+        return 0
+    by_name = {it["name"]: it for it in ref}
+    n = 0
+
+    if CITY.get("use_national"):
+        print("[抓取] 全国参考 · 最新一期 ...")
+        try:
+            # 周报：分品种水果（只取最新 3 期，取到有表5 的那期为止）
+            rows = agri_national.fetch_weekly_rows(page_size=3)
+            for row in rows:
+                fruits = agri_national.parse_fruit_table(row["content"])
+                if not fruits:
+                    continue
+                for fruit, price in fruits.items():
+                    it = by_name.get("全国" + fruit)
+                    if it and append_price(it, price, row["date"]):
+                        n += 1
+                print("  周报 %s：%d 种水果" % (row["date"], len(fruits)))
+                break
+
+            # 日报：全国均价基准
+            drows = agri_national.fetch_daily_rows(days=10)
+            if drows:
+                last = drows[-1]
+                for display, _cat, field in agri_national.DAILY_ITEMS:
+                    it = by_name.get(display)
+                    if not it:
+                        continue
+                    bucket = (last["values"] or {}).get(field) or {}
+                    v = bucket.get("均价") if field in ("vegetables", "fruits") \
+                        else bucket.get(display.replace("全国", ""))
+                    if v and append_price(it, v, last["date"]):
+                        n += 1
+                print("  日报 %s：全国基准已刷新" % last["date"])
+        except Exception as e:
+            print("  [error] 全国参考: %s: %s" % (type(e).__name__, e))
+
+    if CITY.get("use_xinfadi"):
+        print("[抓取] 新发地 · 最新一天 ...")
+        try:
+            day, snap = xinfadi.day_snapshot(datetime.now().strftime("%Y-%m-%d"))
+            if day:
+                for key, price in snap.items():
+                    it = by_name.get(xinfadi.variety_map.display_of(key))
+                    if it and append_price(it, price, day):
+                        n += 1
+                print("  %s：%d 个水果品类" % (day, len(snap)))
+            else:
+                print("  [warn] 最近 4 天新发地无报价")
+        except Exception as e:
+            print("  [error] 新发地: %s: %s" % (type(e).__name__, e))
+
+    return n
+
+
 def main():
     mode = "daily"
+    city = None
     for a in sys.argv[1:]:
         if a.startswith("--mode="):
             mode = a.split("=", 1)[1].strip()
+        elif a.startswith("--city="):
+            city = a.split("=", 1)[1].strip()
         elif a in ("--full", "-f"):
             mode = "full"
         elif a in ("--daily", "-d"):
@@ -1022,7 +1250,14 @@ def main():
         print(f"[error] 未知模式 {mode}，可选 daily / full")
         sys.exit(2)
 
-    print(f"===== 武汉菜篮子 · {mode} 模式 =====")
+    if city:
+        configure(city)
+
+    print(f"===== {CITY.get('title') or '菜篮子'} · {mode} 模式 =====")
+    print(f"      城市: {CITY.get('province')}{CITY.get('name')}({CITY.get('id')})"
+          f" | 本地口径: {CITY.get('local_unit_label')}"
+          f" | 全国参考: {'开' if CITY.get('use_national') else '关'}"
+          f" | 新发地: {'开' if CITY.get('use_xinfadi') else '关'}")
     if mode == "full":
         full_fetch()
     else:

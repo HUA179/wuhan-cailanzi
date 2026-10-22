@@ -56,6 +56,7 @@
   .src-com{color:#a78bfa;border-color:rgba(167,139,250,.32);background:rgba(167,139,250,.1);}
   .src-prov{color:#38bdf8;border-color:rgba(56,189,248,.32);background:rgba(56,189,248,.1);}
   .src-nat{color:#94a3b8;border-color:rgba(148,163,184,.32);background:rgba(148,163,184,.1);}
+  .src-xfd{color:#22d3ee;border-color:rgba(34,211,238,.32);background:rgba(34,211,238,.1);}
   .src-mock{color:#f0b429;border-color:rgba(240,180,41,.32);background:rgba(240,180,41,.1);}
 
   /* 涨跌角标：红涨绿跌，推算用琥珀，无前值用灰 */
@@ -286,7 +287,7 @@
               <span class="text-[25px] md:text-[26px] leading-none font-bold tracking-tight text-white">
                 <span class="text-[13px] font-semibold text-[#93a4bf] align-[2px]">¥</span>{{ priceOf(item).toFixed(2) }}
               </span>
-              <span class="text-[10px] text-[#55688a] whitespace-nowrap">元/500g</span>
+              <span class="text-[10px] text-[#55688a] whitespace-nowrap">{{ unitLabelOf(item) }}</span>
             </div>
             <div class="mt-1.5 flex items-center gap-1.5 min-w-0">
               <span class="delta shrink-0" :class="deltaClass(item)">{{ deltaText(item) }}</span>
@@ -346,8 +347,14 @@
     <!-- 页脚说明 -->
     <div v-if="!loading" class="mt-5 pt-4 border-t border-[#16233c] space-y-1.5">
       <p class="text-[11px] text-[#7b8ca6] leading-relaxed">
-        <b class="text-[#93a4bf]">数据来源</b>：武汉市发改委（每日零售价）· 武汉市农业农村局（批发价）· 武汉市商务局（周报）。
+        <b class="text-[#93a4bf]">数据来源</b>：武汉市发改委（每日零售价）· 武汉市农业农村局（批发价）· 武汉市商务局（周报）·
+        农业农村部全国农产品批发市场价格信息系统（全国参考）· 北京新发地（分品种批发）。
         每天 06:00 自动更新，抓取失败时保留上一次数据。
+      </p>
+      <p class="text-[11px] text-[#7b8ca6] leading-relaxed">
+        <b class="text-[#93a4bf]">口径</b>：本地零售为<b class="text-[#93a4bf]">元/500g</b>，
+        全国参考与新发地为<b class="text-[#93a4bf]">元/公斤</b>（批发口径）。
+        湖北这一层以省会武汉为代表，标注为「湖北·武汉」，不虚构全省均价。
       </p>
       <p class="text-[11px] text-[#7b8ca6] leading-relaxed">
         <b class="text-[#93a4bf]">位置</b>：当前价在近 13 周 / 52 周区间内的百分位，越高代表越接近区间高点。
@@ -408,7 +415,7 @@
               <span class="text-[10px] text-[#55688a]">{{ it.category }}</span>
               <span v-if="isReopen(it)" class="chip chip-flat shrink-0">季节性</span>
             </div>
-            <div class="text-[10px] text-[#55688a] mt-0.5">¥{{ it.currentPrice.toFixed(2) }} / 500g · {{ sourceLabel(it) }}</div>
+            <div class="text-[10px] text-[#55688a] mt-0.5">¥{{ it.currentPrice.toFixed(2) }} {{ unitShort(it) }} · {{ sourceLabel(it) }}</div>
           </div>
           <span class="text-[13px] font-bold" :class="change(it) > 0 ? 'text-[#f87171]' : 'text-[#34d399]'">
             {{ change(it) > 0 ? '+' : '' }}{{ change(it).toFixed(2) }}%
@@ -463,7 +470,7 @@
                 <span class="text-[34px] leading-none font-bold tracking-tight text-white">
                   <span class="text-[15px] font-semibold text-[#93a4bf] align-[3px]">¥</span>{{ priceOf(detailItems[0]).toFixed(2) }}
                 </span>
-                <span class="text-[11px] text-[#55688a]">元/500g</span>
+                <span class="text-[11px] text-[#55688a]">{{ unitLabelOf(detailItems[0]) }}</span>
               </div>
               <div class="mt-2 flex items-center gap-1.5">
                 <span class="delta" :class="deltaClass(detailItems[0])">{{ deltaText(detailItems[0]) }}</span>
@@ -539,7 +546,11 @@
 
             <!-- 数据说明 -->
             <p class="text-[10px] text-[#55688a] leading-relaxed mt-3">
-              单位 500g，价格为政府公示口径，仅供参考。
+              <template v-if="detailItems[0]">
+                单位 {{ unitLabelOf(detailItems[0]) }}<span
+                  v-if="detailItems[0].sourceDetail">，来源 {{ detailItems[0].sourceDetail }}</span>；
+                本地零售为政府公示口径，全国参考/新发地为批发口径，两者不可直接按数字高低比较。
+              </template>
             </p>
           </div>
 
@@ -862,7 +873,16 @@ const vm = createApp({
       .catch(() => done());
   },
   methods: {
-    /* ---------- 价格 ---------- */
+    /* ---------- 价格与单位 ---------- */
+    /* 本地零售是元/500g，全国参考/新发地是元/公斤（批发口径），
+       单位跟着数据走，绝不在前端假设「都是 500g」 */
+    unitLabelOf(it) {
+      if (!it) return '元/500g';
+      return it.unitLabel || (it.unit === 'kg' ? '元/公斤' : '元/500g');
+    },
+    unitShort(it) {
+      return it && it.unit === 'kg' ? '/公斤' : '/500g';
+    },
     priceOf(it) {
       const v = this.mode === 'market' ? it.currentPrice : it.supermarketPrice;
       return Number(v) || 0;
@@ -993,12 +1013,14 @@ const vm = createApp({
       if (s.includes('发改委')) return 'fgj';
       if (s.includes('农业农村')) return 'agri';
       if (s.includes('商务局')) return 'com';
+      if (s.includes('新发地')) return 'xfd';
       if (s.includes('省')) return 'prov';
       if (s.includes('全国')) return 'nat';
       return 'mock';
     },
     sourceLabel(it) {
-      const map = { fgj: '发改委·每日', agri: '农业局·批发', com: '商务局·周报', prov: '省级·参考', nat: '全国·参考', mock: '演示' };
+      const map = { fgj: '发改委·每日', agri: '农业局·批发', com: '商务局·周报',
+                    xfd: '新发地·批发', prov: '省级·参考', nat: '全国·参考', mock: '演示' };
       return map[this.sourceKey(it)];
     },
     sourceClass(it) {

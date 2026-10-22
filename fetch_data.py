@@ -205,6 +205,34 @@ def fgj_point_prices(point_id, date_str):
     return out
 
 
+def pick_cheapest_supermarket(store_prices, raw_name):
+    """
+    商超比价：同一品种取各监测点里的最低价，返回 (价格, 店名)。
+
+    口径（full / daily 共用，避免两端互相覆盖）：
+    - 价格更低者胜，storeName 记对应的店；
+    - 价格相同时中百优先，其余情况保留先抓到的店（store_prices 的顺序）；
+    - 该品种在任何店都没报价时返回 (None, "")，调用方保留旧值。
+
+    不能拿上一轮的旧商超价参与比较：那样昨天的最低价会挡住今天的真实报价。
+    """
+    best_price, best_store = None, ""
+    for st in store_prices:
+        price = st["prices"].get(raw_name)
+        if not price:
+            continue
+        try:
+            v = round(float(price), 2)
+        except (TypeError, ValueError):
+            continue
+        if v <= 0 or v > 10000:
+            continue
+        if (best_price is None or v < best_price
+                or (v == best_price and "中百" in st["name"] and "中百" not in best_store)):
+            best_price, best_store = v, st["name"]
+    return best_price, best_store
+
+
 def weekly_dates(latest, weeks=WEEKS):
     """从最新日期往回，每 7 天取一个日期（升序）。"""
     d0 = datetime.strptime(latest, "%Y-%m-%d")
@@ -507,12 +535,8 @@ def full_fetch():
             series[-1] = round(row["avg"], 2)
             series = [round(v, 2) for v in series]
 
-            # 真实商超价（优先第一家覆盖该品种的超市）
-            sp, store = None, ""
-            for st in store_prices:
-                if raw_name in st["prices"]:
-                    sp, store = round(st["prices"][raw_name], 2), st["name"]
-                    break
+            # 真实商超价：两店比价取最低（价格相同中百优先）
+            sp, store = pick_cheapest_supermarket(store_prices, raw_name)
 
             items.append({
                 "id": idx,
@@ -823,15 +847,20 @@ def daily_update():
                 updated += 1
 
         # 真实商超价（2 个监测点，2 次请求）
+        # 与 full 模式同一口径：两店比价取最低，storeName 记该店，价格相同中百优先。
+        # 必须在本轮抓到的数据里重算，不能拿上一轮的旧商超价参与比较，
+        # 否则昨天那家店的最低价会挡住今天的真实报价。
         try:
+            store_prices = []
             for p in fgj_supermarkets()[:2]:
                 prices = fgj_point_prices(p["id"], latest)
-                for raw_name, price in prices.items():
-                    it = index_fgj.get(raw_name)
-                    if it and price:
-                        it["supermarketPrice"] = round(float(price), 2)
-                        it["storeName"] = p["name"]
+                store_prices.append({"name": p["name"], "prices": prices})
                 print(f"  商超 {p['name']}: {len(prices)} 个品种")
+            for raw_name, it in index_fgj.items():
+                sp, store = pick_cheapest_supermarket(store_prices, raw_name)
+                if sp is not None:
+                    it["supermarketPrice"] = sp
+                    it["storeName"] = store
         except Exception as e:
             print(f"  [error] 商超价: {type(e).__name__}")
 

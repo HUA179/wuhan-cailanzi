@@ -21,6 +21,7 @@
 """
 
 import base64
+import hashlib
 import json
 import os
 import shutil
@@ -119,10 +120,30 @@ def current_sha():
         return None
 
 
+def blob_sha(raw):
+    """
+    算 Git 的 blob sha：sha1("blob <字节数>\\0" + 内容)。
+
+    这个算法的结果和 Contents API 返回的 "sha" 是同一口径，所以能拿来做
+    「内容有没有变」的判据，而且纯本地计算，不额外发请求。
+    """
+    return hashlib.sha1(b"blob %d\0" % len(raw) + raw).hexdigest()
+
+
 def push_data_json(sha):
-    """把本地 data.json 写回仓库。sha 为 None 时先补取，避免 422。"""
+    """
+    把本地 data.json 写回仓库，返回是否真的产生了提交。
+
+    为什么要先比 blob sha：
+        Contents API 在「内容与远端完全一致」时不会报 422，而是老老实实造一个
+        空提交（tree 和父提交一模一样）。发改委一天只发一次价，重复触发或周末
+        无数据时就会天天留一条空提交，还连带触发一次 GitHub Pages 重建。
+        所以内容没变就直接跳过，不发 PUT。
+    """
     with open(os.path.join(WORK_DIR, GH_PATH), "rb") as f:
         raw = f.read()
+
+    local_sha = blob_sha(raw)
     payload = {
         "message": "chore: SCF 全量更新菜价 %s" % time.strftime("%Y-%m-%d %H:%M"),
         "content": base64.b64encode(raw).decode("ascii"),
@@ -132,20 +153,28 @@ def push_data_json(sha):
         sha = current_sha()
         if sha:
             print("[push] 补取到远端 sha=%s" % sha[:8])
+    if sha == local_sha:
+        print("[push] 数据无变化（blob %s，%d 字节），跳过提交"
+              % (local_sha[:8], len(raw)))
+        return False
     if sha:
         payload["sha"] = sha
     try:
         res = _gh(API, method="PUT", payload=payload, retries=2)
     except urllib.error.HTTPError as e:
-        # 409/422 = sha 过期（期间被 Actions 改过），重取一次再推
+        # 409/422 = sha 过期（期间被别的流程改过），重取一次再推
         if e.code not in (409, 422):
             raise
         print("[push] sha 已过期（HTTP %s），重新取一次" % e.code)
         fresh = current_sha()
+        if fresh == local_sha:
+            print("[push] 远端已经是同一份内容（blob %s），跳过提交" % local_sha[:8])
+            return False
         if fresh:
             payload["sha"] = fresh
         res = _gh(API, method="PUT", payload=payload, retries=2)
     print("[push] 已推送 data.json，新 sha=%s" % res["content"]["sha"][:8])
+    return True
 
 
 def verify(local_path):
@@ -192,9 +221,9 @@ def main_handler(event, context):
         raise RuntimeError("full_fetch 没有产出 data.json，放弃推送")
 
     n, real = verify(local)
-    push_data_json(sha)
+    pushed = push_data_json(sha)
     print("=== SCF 全量抓取完成 ===")
-    return {"ok": True, "items": n, "historyReal": real}
+    return {"ok": True, "items": n, "historyReal": real, "pushed": pushed}
 
 
 # 本地自测入口：python index.py --dry

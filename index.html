@@ -784,7 +784,7 @@ const vm = createApp({
       if (this.detailItems.length !== 1) return '';
       const it = this.detailItems[0];
       const t = this.tierName(it);
-      if (t === 'partial') return `实测 ${it.obsWeeks || 0} 周 · 其余无数据`;
+      if (t === 'partial') return `实测 ${this.validWeeks(it)} 周 · 其余无数据`;
       if (t === 'ref' || t === 'mock') return '推算走势 · 非实测';
       return '';
     },
@@ -796,8 +796,10 @@ const vm = createApp({
           : '实线为实测价，琥珀色虚线为推算走势，两者口径不同，不宜直接比大小。';
       }
       const t = this.tierName(list[0]);
-      if (t === 'partial') return `官方仅提供 ${list[0].obsWeeks || 0} 周实测，其余周次无数据：图中断档不连线，也不标极值。`;
+      if (t === 'partial') return `官方仅提供 ${this.validWeeks(list[0])} 周实测，其余周次无数据：图中断档不连线，也不标极值。`;
       if (t === 'ref' || t === 'mock') return '虚线为按同分类真实价格指数推算的走势，仅看趋势，不能当作逐周实测价。';
+      const g = this.gapCount;
+      if (g > 0) return `红点 = 区间最高价，绿点 = 区间最低价。其中 ${g} 周官方无报价，断档不连线。`;
       return '红点 = 区间最高价，绿点 = 区间最低价。双指可缩放，拖动查看具体数值。';
     },
     singleIsReal() {
@@ -808,7 +810,7 @@ const vm = createApp({
       const it = this.detailItems[0];
       if (!it) return '';
       if (this.tierName(it) === 'partial') {
-        return `官方仅提供 ${it.obsWeeks || 0} 周逐周报价，其余周次无实测值。为避免用补位值算出假位置，这里不给百分位，也不在图上标极值。`;
+        return `官方仅提供 ${this.validWeeks(it)} 周逐周报价，其余周次无实测值。为避免用补位值算出假位置，这里不给百分位，也不在图上标极值。`;
       }
       return '该品种只公示当日价，没有 52 周逐周报价。走势按同分类的真实价格指数等比推算，仅可看趋势，不能当作逐周实测价。';
     },
@@ -872,17 +874,24 @@ const vm = createApp({
     isCheapestStore(it) { return !!(it && it.storeName && it.storeName.includes('中百')); },
 
     /* ---------- 数据可信度分级：real / partial / ref / mock ---------- */
+    /* 有效周数：数组里真实有报价的点。null 是断档占位，不算样本 */
+    validWeeks(it) {
+      return (it && it.history || []).filter(v => !isGap(v)).length;
+    },
     tierName(it) {
       if (!it) return 'ref';
       if (it.historyKind === 'random') return 'mock';         // 管道若标了随机生成，直接降级
       if (it.historyReal !== true) return 'ref';              // 推算
       const n = (it.history || []).length;
-      if (it.obsWeeks != null && it.obsWeeks < n) return 'partial';  // 实测周数不足，存在补位
+      // 数据层现在用 null 明确标出断档（如元旦当天政府不报价）。
+      // 零星缺几周不影响百分位与周环比的可信度——周环比只用最近两个有效值，
+      // 只有缺失超过 4 周（样本明显不足）才降级，避免「缺 1 周就全盘否定」。
+      if (n - this.validWeeks(it) > 4) return 'partial';
       return 'real';
     },
     tierText(it) {
       const t = this.tierName(it);
-      if (t === 'partial') return `实测${it.obsWeeks}周`;
+      if (t === 'partial') return `实测${this.validWeeks(it)}周`;
       if (t === 'mock') return '模拟';
       if (t === 'ref') return '推算';
       return '实测';
@@ -893,7 +902,7 @@ const vm = createApp({
     },
     noPosReason(it) {
       const t = this.tierName(it);
-      if (t === 'partial') return `仅 ${it.obsWeeks || 0} 周实测，不作位置判断`;
+      if (t === 'partial') return `仅 ${this.validWeeks(it)} 周实测，不作位置判断`;
       if (t === 'mock') return '模拟数据，不作位置判断';
       return '无逐周实测价，按分类指数推算';
     },
@@ -916,7 +925,7 @@ const vm = createApp({
     deltaCaption(it) {
       if (this.isReopen(it)) return '停报后重新上市，不计周环比';
       const t = this.tierName(it);
-      if (t === 'partial') return `仅 ${it.obsWeeks || 0} 周实测，无实测前值`;
+      if (t === 'partial') return `仅 ${this.validWeeks(it)} 周实测，无实测前值`;
       if (t === 'mock') return '模拟数据，无实测前值';
       if (t === 'ref') return this.mode === 'supermarket' ? '推算周环比（市场价）' : '推算周环比';
       return this.mode === 'supermarket' ? '市场价周环比' : '周环比';

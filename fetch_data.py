@@ -35,7 +35,6 @@
 
 import json
 import os
-import random
 import re
 import sys
 import threading
@@ -383,35 +382,63 @@ def pinyin_initials(name):
     return "".join(lazy_pinyin(name, style=Style.FIRST_LETTER))
 
 
-def gen_history(current, name, weeks=WEEKS):
-    """接口全挂时的兜底假历史（真实历史拿不到才用）。"""
-    rng = random.Random("whcz:" + name)
-    series = [float(current)]
-    for i in range(weeks - 1):
-        change = rng.uniform(-0.04, 0.038)
-        seasonal = 0.02 * (1 if i % 26 < 13 else -1)
-        prev = series[-1] / (1 + change + seasonal * rng.random())
-        prev = max(min(prev, current * 2.8), current * 0.35)
-        series.append(round(prev, 2))
-    series.reverse()
-    return series
-
-
 def year_position(history, current):
-    below = sum(1 for p in history if p <= current)
-    return min(100, round(below / max(len(history), 1) * 100))
+    """
+    当前价在 52 周里的百分位。只统计真实有报价的周，断档（None）不参与分母。
+    一条全空的历史返回 None —— 没有样本就不该给出百分位。
+    """
+    vals = [p for p in history if isinstance(p, (int, float))]
+    if not vals or current is None:
+        return None
+    below = sum(1 for p in vals if p <= current)
+    return min(100, round(below / len(vals) * 100))
 
 
-def fill_series(values):
-    """缺失值用前一个有效值填充，开头的缺失用第一个有效值回填。"""
-    first = next((v for v in values if v is not None), None)
-    if first is None:
-        return []
-    out, last = [], first
-    for v in values:
-        last = v if v is not None else last
-        out.append(last)
-    return out
+def blank_history(weeks=WEEKS):
+    """
+    拿不到真实历史时的占位：整条留空。
+
+    这里以前是 gen_history()，用 random.Random("whcz:" + name) 生成 52 周随机序列，
+    只在分类指数缺失时兜底。但那等于凭空编造一条价格曲线，前端完全无法识别，
+    与「绝不造假」的底线冲突，已彻底删除。缺数据就该显示缺数据。
+    """
+    return [None] * weeks
+
+
+def norm_history(raw, weeks=WEEKS):
+    """把历史序列规整成定长数组：保留 None（断档占位），只剔除非法类型与负值。"""
+    out = []
+    for v in (raw or []):
+        if v is None:
+            out.append(None)
+        elif isinstance(v, (int, float)) and v > 0:
+            out.append(round(float(v), 2))
+        else:
+            out.append(None)
+    if len(out) < weeks:
+        out = [None] * (weeks - len(out)) + out
+    return out[-weeks:]
+
+
+def dates_ending(n, last_date):
+    """按末位日期往前推 n 周的升序日期数组，保证与 history 等长。"""
+    try:
+        d0 = datetime.strptime(last_date, "%Y-%m-%d")
+    except Exception:
+        return [None] * n
+    return [(d0 - timedelta(weeks=i)).strftime("%Y-%m-%d") for i in range(n - 1, -1, -1)]
+
+
+def article_date(url):
+    """
+    从政府站文章 URL 提取 ISO 日期。
+    URL 形如 .../t20260911_2846915.shtml，文件名前 8 位是日期。
+    返回 None 表示解析失败，交给调用方回退到数据日。
+    """
+    raw = url.split("/")[-1][1:9]
+    if len(raw) == 8 and raw.isdigit():
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
+    return None
 
 
 def build_cat_index(daily_cache, dates, name2cat):
@@ -434,27 +461,31 @@ def build_cat_index(daily_cache, dates, name2cat):
             day = daily_cache.get(d) or {}
             vals = [day[n]["avg"] for n in names if n in day]
             series.append(sum(vals) / len(vals) if vals else None)
-        series = fill_series(series)
-        if len(series) < 8:
+        # 不再前向填充：缺失的那周保持 None，指数曲线该断就断。
+        # 原来 fill_series 会把空周填成前值，等于凭空造出一段「价格平稳」。
+        anchors = [v for v in series if v is not None]
+        if len(anchors) < 8:
             continue
-        last = series[-1] or series[-2]
+        last = anchors[-1]
         if not last:
             continue
-        idx[cat] = [v / last for v in series]
+        idx[cat] = [round(v / last, 6) if v is not None else None for v in series]
     return idx
 
 
-def hist_from_index(price, ratio, name):
+def hist_from_index(price, ratio):
     """
-    按分类指数缩放出该品种的 52 周历史。
-    叠一个按品种名定相位的 ±2% 正弦扰动，避免同分类曲线完全重合；末值强制等于当前价。
+    按分类真实指数缩放出该品种的 52 周历史。
+
+    曲线形状完全由真实分类指数决定，不叠加任何人为扰动
+    （旧版按品种名相位叠了 ±2% 正弦波，纯粹为了让同分类曲线不重合而凭空抖动，
+    已去掉）。指数缺失的周同样留 None，不插值，保证断档可辨。
     """
-    import math
-    phase = (sum(ord(c) for c in name) % 100) / 100 * 2 * math.pi
-    out = [round(price * r * (1 + 0.02 * math.sin(i * 0.9 + phase)), 2)
-           for i, r in enumerate(ratio)]
-    if out:
-        out[-1] = round(price, 2)
+    out = [round(price * r, 2) if r is not None else None for r in ratio]
+    if not out:
+        return []
+    if out[-1] is None:
+        out[-1] = round(price, 2)      # 末位有今日真实报价，指数却缺 → 用真价锚定
     return out
 
 
@@ -529,11 +560,11 @@ def full_fetch():
                     break
             obs_weeks = sum(1 for v in raw_series if v is not None)
 
-            series = fill_series(raw_series)
-            if len(series) < 8:                # 历史太少则退回模拟，避免图难看
-                series = gen_history(row["avg"], display_name)
-            series[-1] = round(row["avg"], 2)
-            series = [round(v, 2) for v in series]
+            # 真实报价缺的周一律留 None：不补齐、不生成、不插值。
+            # 以前这里 fill_series 前向填充、不足 8 周还退回随机数，
+            # 结果停报周变成一条水平假线，图上完全看不出断档。
+            series = norm_history(raw_series)
+            series[-1] = round(row["avg"], 2)      # 末位是今日真实价
 
             # 真实商超价：两店比价取最低（价格相同中百优先）
             sp, store = pick_cheapest_supermarket(store_prices, raw_name)
@@ -550,6 +581,8 @@ def full_fetch():
                 "storeName": store,
                 "yearPosition": year_position(series, row["avg"]),
                 "history": series,
+                "historyDates": dates,          # 与 history 一一对应的真实周日期
+                "historyKind": "real",          # real=逐周实测 / index=分类指数推算 / none=无数据
                 "historyReal": True,
                 "prevObs": prev_obs,          # 上一个真实有报价的周（跳过停报周）
                 "prevObsAge": prev_age,       # 距今几周；>4 视为季节性重新上市
@@ -585,11 +618,12 @@ def full_fetch():
                     continue
                 ratio = cat_index.get(src["category"])
                 if ratio:
-                    h = hist_from_index(it["price"], ratio, it["name"])
-                    hreal = False          # 指数推算：形状来自真实行情，价格锚定当日真实报价
+                    h = hist_from_index(it["price"], ratio)
+                    hkind = "index"        # 形状来自分类真实指数，价格锚定当日真实报价
                 else:
-                    h = gen_history(it["price"], it["name"])
-                    hreal = False
+                    h = blank_history()    # 连分类指数都没有 → 整条留空，绝不生成
+                    hkind = "none"
+                hreal = False
                 items.append({
                     "id": idx,
                     "name": it["name"],
@@ -602,6 +636,8 @@ def full_fetch():
                     "storeName": "",
                     "yearPosition": year_position(h, it["price"]),
                     "history": h,
+                    "historyDates": dates,
+                    "historyKind": hkind,
                     "historyReal": hreal,
                     "prevObs": None,
                     "prevObsAge": None,
@@ -630,8 +666,10 @@ def full_fetch():
                     if it["name"] in used_names:
                         continue
                     ratio = cat_index.get(cat)
-                    h = hist_from_index(it["price"], ratio, it["name"]) if ratio \
-                        else gen_history(it["price"], it["name"])
+                    if ratio:
+                        h, hkind = hist_from_index(it["price"], ratio), "index"
+                    else:
+                        h, hkind = blank_history(), "none"   # 无指数可用 → 留空
                     items.append({
                         "id": idx,
                         "name": it["name"],
@@ -644,12 +682,17 @@ def full_fetch():
                         "storeName": "",
                         "yearPosition": year_position(h, it["price"]),
                         "history": h,
+                        "historyDates": dates,
+                        "historyKind": hkind,
                         "historyReal": False,
                         "prevObs": None,
                         "prevObsAge": None,
                         "obsWeeks": 52,
                         "source": "商务局·周报",
-                        "updated": u.split("/")[-1][1:9],
+                        # 必须转成 ISO 日期：原来直接取 URL 的 8 位数字（"20260911"），
+                        # 会在前端显示成怪字符串，也让 weeks_since() 解析失败恒返回 0
+                        "updated": article_date(u) or latest
+                        or datetime.now().strftime("%Y-%m-%d"),
                     })
                     used_names.add(it["name"])
                     idx += 1
@@ -708,12 +751,38 @@ def restore_fgj_items(items):
     return n
 
 
+def finalize_history(items):
+    """
+    统一兜底：history / historyDates 必须等长，historyKind 必须存在。
+
+    主力场景是 restore_fgj_items 继承进来的老格式数据——那些 item 没有
+    historyDates 字段，直接落盘会让前端读到空日期轴。
+    """
+    for it in items:
+        h = norm_history(it.get("history"))
+        it["history"] = h
+        dts = it.get("historyDates") or []
+        if len(dts) != len(h) or any(d is None for d in dts):
+            dts = dates_ending(len(h), it.get("updated")
+                               or datetime.now().strftime("%Y-%m-%d"))
+        it["historyDates"] = dts
+        if not it.get("historyKind"):
+            if it.get("historyReal"):
+                it["historyKind"] = "real"
+            elif any(v is not None for v in h):
+                it["historyKind"] = "index"
+            else:
+                it["historyKind"] = "none"
+
+
 def save_items(items, tag=""):
     """统一出口：排序 + 重编号 + 落盘。"""
     CAT_ORDER = {"蔬菜": 0, "肉禽蛋": 1, "水产": 2, "米面粮油": 3, "豆制品": 4}
     items.sort(key=lambda x: (CAT_ORDER.get(x["category"], 9), x["id"]))
     for i, it in enumerate(items, 1):
         it["id"] = i
+
+    finalize_history(items)
 
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
@@ -723,15 +792,21 @@ def save_items(items, tag=""):
         stats[it["category"]] = stats.get(it["category"], 0) + 1
     real_hist = sum(1 for it in items if it.get("historyReal"))
     with_sp = sum(1 for it in items if it.get("supermarketPrice"))
+    kinds = {}
+    for it in items:
+        kinds[it.get("historyKind")] = kinds.get(it.get("historyKind"), 0) + 1
+    blanks = sum(1 for it in items if all(v is None for v in (it.get("history") or [])))
     print(f"\n[完成{('·' + tag) if tag else ''}] {len(items)} 个品种 | 分类: {stats}")
     print(f"       真实历史: {real_hist} 种 | 真实商超价: {with_sp} 种")
+    print(f"       历史来源: {kinds} | 整条留空: {blanks} 种")
 
 
 def append_price(it, price, date_str, gap_weeks=1):
     """
     把今天的新价追加进 52 周序列，淘汰最老的一周，重算百分位。
     - 同一天重复跑（手动触发两次）不会产生重复点，只覆盖最后一位
-    - 历史为空 / 不足 52 周时自动补齐，绝不抛异常
+    - 历史为空 / 不足 52 周时用 None 对齐长度，不用旧价冒充历史
+    - historyDates 与 history 同步右移，保证日期和价格永不错位
     返回 True 表示已更新，False 表示被健康检查拦下。
     """
     try:
@@ -741,8 +816,10 @@ def append_price(it, price, date_str, gap_weeks=1):
     if not price or price <= 0 or price > 10000:
         return False
 
-    h = [v for v in (it.get("history") or []) if isinstance(v, (int, float))]
-    old = h[-1] if h else None
+    # 必须保留 None（断档占位）。原来这里用 isinstance(v, (int, float)) 过滤，
+    # 会把 null 全部剔除、序列被压缩变短，与 historyDates 整体错位。
+    h = norm_history(it.get("history"))
+    old = next((v for v in reversed(h) if v is not None), None)
 
     # -------- 健康检查：无征兆的暴涨/暴跌一律跳过，保留旧数据 --------
     if old and not price_sane(old, price, gap_weeks):
@@ -750,24 +827,27 @@ def append_price(it, price, date_str, gap_weeks=1):
               f"（{price / old * 100:.0f}%），保留旧值")
         return False
 
-    if it.get("updated") == date_str and h:
+    if it.get("updated") == date_str:
         h[-1] = price                      # 同日重跑：覆盖，不追加
     else:
-        # 历史不足 52 周时用最早值向前补齐，保证图表和百分位口径一致
+        # 长度对齐用 None 补，绝不拿最早一周的旧价向前填充
         while len(h) < WEEKS - 1:
-            h.insert(0, h[0] if h else price)
+            h.insert(0, None)
         h.append(price)
         if len(h) > WEEKS:
             h = h[-WEEKS:]
 
     it["history"] = h
+    it["historyDates"] = dates_ending(len(h), date_str)   # 日期随价格同步右移
     it["currentPrice"] = price
     it["yearPosition"] = year_position(h, price)
     it["updated"] = date_str
 
     if it.get("source") == "武汉市发改委":
         it["historyReal"] = True
-        it["prevObs"] = h[-2] if len(h) > 1 else None
+        it["historyKind"] = "real"
+        # 上一周真实有报价的值（跳过停报周留下的 None）
+        it["prevObs"] = next((v for v in reversed(h[:-1]) if v is not None), None)
         it["prevObsAge"] = gap_weeks
         it["obsWeeks"] = min(WEEKS, (it.get("obsWeeks") or 0) + 1)
     return True

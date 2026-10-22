@@ -8,9 +8,9 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="180x180" href="icon-180.png">
 <title>武汉菜篮子 · 官方菜价监测</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/vue@3.4.31/dist/vue.global.prod.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="./lib/tailwind.css">
+<script src="./lib/vue.global.prod.js"></script>
+<script src="./lib/echarts.min.js"></script>
 <style>
   :root{
     --bg:#0a1120;
@@ -161,6 +161,15 @@
           {{ dataSource === 'real' ? sourceStats.length + ' 源官方' : '演示数据' }}
         </span>
         <button @click="rankVisible = true" class="btn-ghost ml-auto shrink-0">📊 涨跌榜</button>
+      </div>
+
+      <!-- 数据加载失败就明说，不能让人以为价格就是这样 -->
+      <div v-if="loadError"
+           class="mt-2.5 rounded-xl border border-[#f0b429]/40 bg-[#f0b429]/10 px-3 py-2
+                  text-[11px] leading-relaxed text-[#f0b429]">
+        ⚠️ 读不到 data.json，当前显示的是 6 条演示数据，不是真实菜价。
+        如果是在本地双击打开的文件，浏览器禁止 file:// 读取本地文件，
+        请用 <b>python -m http.server</b> 起个本地服务，或直接访问线上站点。
       </div>
 
       <!-- 模式 + 搜索 -->
@@ -681,6 +690,7 @@ const vm = createApp({
         { key: 'pos', label: '位置 贵→便宜' }
       ],
       items: MOCK_ITEMS,
+      loadError: false,
       dataSource: 'mock',
       activeSource: '',
       loading: true,
@@ -872,7 +882,12 @@ const vm = createApp({
         }
         done();
       })
-      .catch(() => done());
+      .catch(err => {
+        // 读不到真实数据就明说，不能让人以为价格就长这样
+        this.loadError = true;
+        try { console.warn('[cailanzi] data.json 加载失败：', err && err.message); } catch (e) {}
+        done();
+      });
   },
   methods: {
     /* ---------- 价格与单位 ---------- */

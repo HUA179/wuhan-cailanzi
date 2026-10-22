@@ -1,0 +1,12 @@
+{
+  "name": "cailanzi-tailwind",
+  "private": true,
+  "version": "1.0.0",
+  "description": "仅用于把 index.html 里用到的 Tailwind 类编译成静态 CSS，运行时不依赖 CDN",
+  "scripts": {
+    "build": "tailwindcss -c tailwind.config.js -i input.css -o ../../lib/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

@@ -21,7 +21,7 @@
 
 | 层 | 方案 |
 | --- | --- |
-| 前端 | 单文件 `index.html`，Vue 3（Global Build）+ TailwindCSS + ECharts，全 CDN，双击可运行 |
+| 前端 | 单文件 `index.html`，Vue 3（Global Build）+ ECharts + 预编译 Tailwind CSS，**依赖全部本地化，不请求任何公共 CDN** |
 | 数据 | `data.json`，静态 JSON，前端 `fetch` 读取 |
 | 爬虫 | `fetch_data.py`，requests + BeautifulSoup + pypinyin |
 | 自动化 | GitHub Actions 每日 06:00（北京时间）跑增量更新并提交 |
@@ -44,7 +44,7 @@ python -m http.server 8000
 # 浏览器打开 http://127.0.0.1:8000
 ```
 
-> 直接双击 `index.html` 也能用，但浏览器对 `file://` 的 `fetch` 有限制，会退回内置演示数据。要看到真实数据必须走 `http.server`。
+> 直接双击 `index.html` 样式和脚本都正常，但浏览器禁止 `file://` 页面 `fetch` 本地文件，`data.json` 读不到，页面顶部会出现黄色提示条并退回 6 条演示数据。**要看到真实数据必须起本地服务**，或者直接访问线上站点。
 
 ## 两种抓取模式（重要）
 
@@ -78,6 +78,10 @@ python -m unittest discover -s tests -v       # 离线单元测试（不联网�
 
 ```
 index.html                           前端（单文件，全部逻辑内联）
+lib/vue.global.prod.js               Vue 3.4.31 运行时（本地副本）
+lib/echarts.min.js                   ECharts 5.5.1 运行时（本地副本）
+lib/tailwind.css                     预编译样式（15 KB，只含页面用到的类）
+tools/tailwind/                      Tailwind 构建配置（改类名后要重新编译）
 fetch_data.py                        主流程（--mode=full / daily，--city=xxx）
 cities/base.py                       城市配置基座（必填校验 + 默认值）
 cities/wuhan.py                      武汉：站点参数 / 分类映射 / 名称归一 / 源开关
@@ -90,6 +94,22 @@ data.json                            数据（180 条，每条 52 周 history）
 requirements.txt                     依赖（只有 3 个第三方包）
 .github/workflows/update-price.yml   每日自动更新
 ```
+
+### 前端依赖为什么不走 CDN
+
+早期用 `cdn.jsdelivr.net` 和 `cdn.tailwindcss.com`，结果在手机 QQ、夸克、必应浏览器里**整页空白**——这些环境会拦截境外 CDN，Vue 加载失败导致 `v-cloak` 永远不解除，页面就一直是背景色。现在三个依赖全部落在 `lib/`，`index.html` 里零外链，断网也能正常渲染。
+
+**Tailwind 的处理方式**：不用浏览器端编译版（`cdn.tailwindcss.com` 那 400 KB 的 JIT 运行时），改成构建期编译成静态 CSS，只保留页面实际用到的类，**15 KB**。
+
+改了 `index.html` 里的 Tailwind 类名后必须重新编译，否则新类不生效：
+
+```bash
+cd tools/tailwind
+npm i                      # 只装 tailwindcss 一个开发依赖，约 10 秒
+npm run build              # 输出到 ../../lib/tailwind.css
+```
+
+`lib/` 下的三个文件建议提交进仓库：站点是纯静态托管，没有构建流水线，运行时必须有这些文件。
 
 ### 换城市怎么做
 

@@ -23,6 +23,7 @@
 import base64
 import json
 import os
+import shutil
 import sys
 import time
 import urllib.error
@@ -71,15 +72,34 @@ def _gh(url, method="GET", payload=None, retries=3):
     raise RuntimeError("GitHub API 连续 %d 次失败: %s（%s）" % (retries, url, last_err))
 
 
+def use_bundled(reason):
+    """
+    拉不到远端基准时，回退到随代码打包的 data.json。
+
+    为什么要有这层：国内访问 GitHub 偶发超时，如果因为拉基准失败就整次退出，
+    发改委那边明明抓到了也白跑。打包里的 data.json 是上一次的完整快照，
+    作为 full_fetch 的基准足够，不会丢历史。
+    """
+    bundled = os.path.join(CODE_DIR, GH_PATH)
+    if not os.path.exists(bundled):
+        print("[pull] %s，且包内无基准 data.json" % reason)
+        return None
+    shutil.copyfile(bundled, os.path.join(WORK_DIR, GH_PATH))
+    size = os.path.getsize(bundled)
+    print("[pull] %s，改用包内基准 data.json（%d 字节）" % (reason, size))
+    return None
+
+
 def pull_data_json():
     """拉远端最新 data.json 作为基准，返回文件 sha。"""
     try:
         info = _gh("%s?ref=%s" % (API, GH_BRANCH))
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print("[pull] 远端还没有 data.json，本次从零构建")
-            return None
-        raise
+            return use_bundled("远端还没有 data.json")
+        return use_bundled("拉取远端失败 HTTP %s" % e.code)
+    except Exception as e:
+        return use_bundled("拉取远端失败 %s" % type(e).__name__)
     raw = base64.b64decode(info["content"])
     with open(os.path.join(WORK_DIR, GH_PATH), "wb") as f:
         f.write(raw)
@@ -87,8 +107,20 @@ def pull_data_json():
     return info["sha"]
 
 
+def current_sha():
+    """推送前重新取一次远端 sha。走兜底基准时 sha 为空，缺了它会 422。"""
+    try:
+        return _gh("%s?ref=%s" % (API, GH_BRANCH), retries=2)["sha"]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        return None
+    except Exception:
+        return None
+
+
 def push_data_json(sha):
-    """把本地 data.json 写回仓库。sha 为 None 表示新建文件。"""
+    """把本地 data.json 写回仓库。sha 为 None 时先补取，避免 422。"""
     with open(os.path.join(WORK_DIR, GH_PATH), "rb") as f:
         raw = f.read()
     payload = {
@@ -96,9 +128,23 @@ def push_data_json(sha):
         "content": base64.b64encode(raw).decode("ascii"),
         "branch": GH_BRANCH,
     }
+    if not sha:
+        sha = current_sha()
+        if sha:
+            print("[push] 补取到远端 sha=%s" % sha[:8])
     if sha:
         payload["sha"] = sha
-    res = _gh(API, method="PUT", payload=payload)
+    try:
+        res = _gh(API, method="PUT", payload=payload, retries=2)
+    except urllib.error.HTTPError as e:
+        # 409/422 = sha 过期（期间被 Actions 改过），重取一次再推
+        if e.code not in (409, 422):
+            raise
+        print("[push] sha 已过期（HTTP %s），重新取一次" % e.code)
+        fresh = current_sha()
+        if fresh:
+            payload["sha"] = fresh
+        res = _gh(API, method="PUT", payload=payload, retries=2)
     print("[push] 已推送 data.json，新 sha=%s" % res["content"]["sha"][:8])
 
 

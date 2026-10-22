@@ -1,10 +1,19 @@
 name: 每日更新武汉菜价
 
+# ---------------------------------------------------------------
+# 定时抓取已迁到腾讯云 SCF：
+#   函数 cailanzi-full（广州），每天北京时间 07:00 跑 full_fetch()
+#   跑完直接回写 data.json，同时覆盖 52 周历史
+#
+# 这里不再保留 schedule —— 两套定时同时提交 data.json 会互相顶掉，
+# 白白产生一次 422 重试。Actions 现在只作为「手动兜底」保留：
+# 在网页上点 Run workflow 手动跑一次（可选 daily / full）。
+# ---------------------------------------------------------------
 on:
-  schedule:
-    # GitHub 用 UTC 时间：北京时间 06:00 = UTC 前一天 22:00
-    - cron: '0 22 * * *'
-  workflow_dispatch:  # 允许手动触发
+  # schedule:
+  #   # GitHub 用 UTC 时间：北京时间 06:00 = UTC 前一天 22:00
+  #   - cron: '0 22 * * *'
+  workflow_dispatch:  # 仅手动触发
     inputs:
       mode:
         description: '抓取模式：daily 只追加今天（默认）；full 重爬 52 周历史'
@@ -34,9 +43,9 @@ jobs:
       - name: 安装依赖
         run: pip install requests beautifulsoup4 pypinyin
 
-      # 动静分离：52 周历史是死数据，只在本地用 --mode=full 抓。
-      # 云端每天只抓「今天」这一个截面，请求数个位数，几秒跑完，杜绝超时。
-      # 发改委是裸 IP:7600，境外 ConnectTimeout 属常态，脚本会自动跳过并保留旧数据。
+      # 注意：GitHub 的 runner 在境外，发改委是裸 IP:7600 出境不可达，
+      # 所以这里即使选 full 也拿不到 52 周历史（会保留旧数据，不会写坏）。
+      # 真要重爬历史，用 scf 或本机跑 fetch_data.py --mode=full。
       - name: 追加今日菜价
         timeout-minutes: 8
         run: python fetch_data.py --mode=${{ github.event.inputs.mode || 'daily' }}

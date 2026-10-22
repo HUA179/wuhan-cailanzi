@@ -6,3 +6,10 @@
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 pypinyin>=0.51.0
+
+# 重要：urllib3 必须钉在 1.26.x
+# SCF 的 Python 3.9 运行时底层是 CentOS 7，ssl 编译自 OpenSSL 1.0.2k；
+# urllib3 2.x 硬性要求 OpenSSL 1.1.1+，装进去会让函数一 import requests 就报
+#   ImportError: urllib3 v2 only supports OpenSSL 1.1.1+
+# 打包用 workspace 根目录的 build_scf_zip.py，它已经写死了 urllib3==1.26.20。
+urllib3>=1.26,<2

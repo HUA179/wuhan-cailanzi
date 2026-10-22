@@ -2,467 +2,653 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>武汉菜篮子</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a1120">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a1120'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%2334d399'/%3E%3C/svg%3E">
+<title>武汉菜篮子 · 官方菜价监测</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.4.31/dist/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <style>
-  [v-cloak] { display:none; }
-  body { background:#eef1f5; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-         -webkit-tap-highlight-color:transparent; }
-  .no-scrollbar::-webkit-scrollbar { display:none; }
-  .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
-
-  /* 抽屉 / 遮罩动画 */
-  .sheet-enter-active,.sheet-leave-active { transition:transform .28s cubic-bezier(.32,.72,0,1); }
-  .sheet-enter-from,.sheet-leave-to { transform:translateY(100%); }
-  .fade-enter-active,.fade-leave-active { transition:opacity .25s ease; }
-  .fade-enter-from,.fade-leave-to { opacity:0; }
-
-  /* 骨架屏微光 */
-  @keyframes shimmer { 100% { transform:translateX(100%); } }
-  .skeleton { position:relative; overflow:hidden; background:#e8ecf1; }
-  .skeleton::after {
-    content:''; position:absolute; inset:0; transform:translateX(-100%);
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,.8),transparent);
-    animation:shimmer 1.4s infinite;
+  :root{
+    --bg:#0a1120;
+    --bg-2:#0d1526;
+    --surface:#111c31;
+    --surface-2:#16233c;
+    --line:#1e2b47;
+    --line-soft:#16233c;
+    --ink:#e8eefb;
+    --ink-2:#93a4bf;
+    --ink-3:#5f7192;
+    --up:#f87171;      /* 涨 = 红 */
+    --down:#34d399;    /* 跌 = 绿 */
+    --flat:#8b9bb4;
+    --ref:#f0b429;     /* 推算 / 参考 */
+    --real:#34d399;
   }
-  .card-press { transition:transform .12s ease, box-shadow .2s ease; }
-  .card-press:active { transform:scale(.985); }
+  [v-cloak]{display:none;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:var(--bg); color:var(--ink); overflow-x:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-tap-highlight-color:transparent;
+  }
+  /* 自定义 .chip 的 display 会盖掉 tailwind 的 hidden，这里给个专用开关 */
+  .only-md{display:none !important;}
+  @media (min-width:768px){ .only-md{display:inline-flex !important;} }
+  .no-scrollbar::-webkit-scrollbar{display:none;}
+  .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none;}
+
+  /* ---------- 通用小块 ---------- */
+  .chip{
+    display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:999px;
+    font-size:10px;line-height:1;white-space:nowrap;border:1px solid transparent;font-weight:500;
+  }
+  .chip-cat{background:#1a2540;color:#93a4bf;border-color:#22304f;}
+  .chip-real{background:rgba(52,211,153,.12);color:#34d399;border-color:rgba(52,211,153,.3);}
+  .chip-ref{background:rgba(240,180,41,.13);color:#f0b429;border-color:rgba(240,180,41,.32);}
+  .chip-partial{background:rgba(148,163,184,.14);color:#a8b6cc;border-color:rgba(148,163,184,.32);}
+  .chip-flat{background:rgba(148,163,184,.14);color:#a8b6cc;border-color:rgba(148,163,184,.28);}
+  .chip-cmp{background:rgba(240,180,41,.18);color:#f0b429;}
+
+  .src-fgj{color:#34d399;border-color:rgba(52,211,153,.32);background:rgba(52,211,153,.1);}
+  .src-agri{color:#60a5fa;border-color:rgba(96,165,250,.32);background:rgba(96,165,250,.1);}
+  .src-com{color:#a78bfa;border-color:rgba(167,139,250,.32);background:rgba(167,139,250,.1);}
+  .src-prov{color:#38bdf8;border-color:rgba(56,189,248,.32);background:rgba(56,189,248,.1);}
+  .src-nat{color:#94a3b8;border-color:rgba(148,163,184,.32);background:rgba(148,163,184,.1);}
+  .src-mock{color:#f0b429;border-color:rgba(240,180,41,.32);background:rgba(240,180,41,.1);}
+
+  /* 涨跌角标：红涨绿跌，推算用琥珀，无前值用灰 */
+  .delta{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.2px;}
+  .d-up{background:rgba(248,113,113,.14);color:var(--up);}
+  .d-down{background:rgba(52,211,153,.14);color:var(--down);}
+  .d-flat{background:rgba(148,163,184,.14);color:var(--flat);}
+  .d-ref{background:rgba(240,180,41,.14);color:var(--ref);}
+  .d-unknown{background:rgba(148,163,184,.1);color:#7b8ca6;border:1px dashed rgba(148,163,184,.35);}
+
+  /* ---------- 卡片 ---------- */
+  .card{
+    position:relative;background:var(--surface);border:1px solid var(--line);
+    border-radius:14px;padding:11px 12px 11px 14px;overflow:hidden;
+    transition:transform .12s ease,border-color .2s ease,background .2s ease;
+  }
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--strip,transparent);}
+  .card-real{--strip:linear-gradient(180deg,#34d399,#0d9488);}
+  .card-ref{--strip:linear-gradient(180deg,#f0b429,#a16207);
+    background:linear-gradient(180deg,rgba(240,180,41,.05),rgba(240,180,41,0) 46%),var(--surface);}
+  .card-partial{--strip:linear-gradient(180deg,#94a3b8,#475569);
+    background:linear-gradient(180deg,rgba(148,163,184,.055),rgba(148,163,184,0) 46%),var(--surface);}
+  .card-mock{--strip:linear-gradient(180deg,#f0b429,#a16207);}
+  .card-cmp{border-color:rgba(240,180,41,.6);box-shadow:0 0 0 1px rgba(240,180,41,.35);}
+  .card-press:active{transform:scale(.988);}
+  @media (hover:hover){
+    .card:hover{border-color:#2c3d60;background:var(--surface-2);}
+  }
+
+  /* 位置条 */
+  .pbar{position:relative;height:5px;border-radius:999px;background:#1a2540;margin-top:6px;}
+  .pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;display:block;}
+  .pbar u{position:absolute;top:50%;width:7px;height:7px;border-radius:50%;background:#e8eefb;
+    box-shadow:0 0 0 2px #0d1526;transform:translate(-50%,-50%);}
+  .bar-high{background:linear-gradient(90deg,#7f1d1d,#f87171);}
+  .bar-mid{background:linear-gradient(90deg,#78500a,#f0b429);}
+  .bar-low{background:linear-gradient(90deg,#065f46,#34d399);}
+  .p-high{color:var(--up);} .p-mid{color:var(--ref);} .p-low{color:var(--down);}
+
+  /* ---------- 胶囊按钮 ---------- */
+  .pill{
+    flex:0 0 auto;height:26px;padding:0 11px;border-radius:999px;font-size:11.5px;font-weight:500;
+    color:#93a4bf;background:#111c31;border:1px solid #1e2b47;transition:all .15s ease;white-space:nowrap;
+  }
+  .pill-on{color:#04140d;background:#34d399;border-color:#34d399;font-weight:700;}
+  .seg{display:flex;background:#111c31;border:1px solid #1e2b47;border-radius:999px;padding:3px;}
+  .seg button{flex:1;height:26px;border-radius:999px;font-size:12px;font-weight:600;color:#7b8ca6;transition:all .15s ease;}
+  .seg .on-market{background:#34d399;color:#04140d;}
+  .seg .on-super{background:#60a5fa;color:#041a2e;}
+  .sortbtn{height:22px;padding:0 8px;border-radius:6px;font-size:11px;color:#7b8ca6;transition:all .15s;}
+  .sortbtn-on{color:#e8eefb;background:#16233c;font-weight:600;}
+  .az{
+    width:26px;height:26px;border-radius:7px;font-size:11px;font-weight:600;
+    color:#8b9bb4;background:#111c31;border:1px solid #1e2b47;transition:all .15s ease;
+  }
+  .az-on{background:#34d399;color:#04140d;border-color:#34d399;}
+  .az-dim{opacity:.32;}
+  .btn-ghost{
+    height:27px;padding:0 10px;border-radius:999px;font-size:11.5px;font-weight:500;
+    color:#a8b6cc;background:#111c31;border:1px solid #1e2b47;
+  }
+  .btn-ghost:active{background:#16233c;}
+
+  /* ---------- 弹窗 ---------- */
+  @keyframes sheetIn{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  @keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.985);}to{opacity:1;transform:none;}}
+  .dialog{animation:sheetIn .3s cubic-bezier(.32,.72,0,1);}
+  @media (min-width:768px){
+    .dialog{animation:popIn .2s ease-out;}
+  }
+  .fade-enter-active,.fade-leave-active{transition:opacity .2s ease;}
+  .fade-enter-from,.fade-leave-to{opacity:0;}
+
+  /* ---------- 骨架屏 ---------- */
+  @keyframes shimmer{100%{transform:translateX(100%);}}
+  .skeleton{position:relative;overflow:hidden;background:#16233c;border-radius:6px;}
+  .skeleton::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);animation:shimmer 1.5s infinite;}
+
+  /* 滚动条（桌面） */
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#22304f;border-radius:8px;border:3px solid var(--bg);}
+  ::-webkit-scrollbar-track{background:transparent;}
 </style>
 </head>
-<body>
+<body class="antialiased">
 
-<div id="app" v-cloak class="max-w-md mx-auto bg-gray-50 min-h-screen shadow-xl relative flex flex-col">
+<div id="app" v-cloak>
 
-  <!-- ===== 顶部（随页面滚动）===== -->
-  <div class="bg-white px-4 pt-4 pb-3">
-    <div class="flex items-center justify-between mb-3">
-      <div class="flex items-center gap-2">
-        <h1 class="text-xl font-bold text-gray-800">🥬 武汉菜篮子</h1>
-        <span class="text-[10px] px-1.5 py-0.5 rounded-full border"
-          :class="dataSource === 'real'
-            ? 'text-green-600 border-green-300 bg-green-50'
-            : 'text-amber-600 border-amber-300 bg-amber-50'">
-          {{ dataSource === 'real' ? sourceStats.length + ' 源官方数据' : '演示数据' }}
+  <!-- ================= 顶部 ================= -->
+  <header class="border-b border-[#16233c] bg-[#0a1120]">
+    <div class="mx-auto w-full max-w-[1560px] px-3 md:px-6 pt-3 md:pt-4">
+
+      <!-- 品牌行 -->
+      <div class="flex items-center gap-2 min-w-0">
+        <h1 class="text-[17px] md:text-[19px] font-bold tracking-tight text-[#e8eefb] whitespace-nowrap shrink-0">
+          <span class="mr-0.5">🥬</span>武汉菜篮子
+        </h1>
+        <span class="chip shrink-0" :class="dataSource === 'real' ? 'chip-real' : 'chip-mock'">
+          {{ dataSource === 'real' ? sourceStats.length + ' 源官方' : '演示数据' }}
         </span>
+        <button @click="rankVisible = true" class="btn-ghost ml-auto shrink-0">📊 涨跌榜</button>
       </div>
-      <button @click="openRank" class="text-xs px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-600 font-medium active:bg-gray-200">
-        📊 涨跌榜
-      </button>
-    </div>
 
-    <!-- 双轨切换 -->
-    <div class="flex bg-gray-100 rounded-full p-1 mb-3">
-      <button @click="mode='market'"
-        :class="mode==='market' ? 'bg-white shadow text-green-600 font-semibold' : 'text-gray-500'"
-        class="flex-1 py-1.5 rounded-full text-sm transition-all">📍 市场均价</button>
-      <button @click="mode='supermarket'"
-        :class="mode==='supermarket' ? 'bg-white shadow text-blue-600 font-semibold' : 'text-gray-500'"
-        class="flex-1 py-1.5 rounded-full text-sm transition-all">🛒 商超价格</button>
-    </div>
+      <!-- 模式 + 搜索 -->
+      <div class="mt-2.5 flex flex-col md:flex-row md:items-center gap-2">
+        <div class="seg md:w-[236px]">
+          <button @click="mode = 'market'" :class="mode === 'market' ? 'on-market' : ''">📍 市场均价</button>
+          <button @click="mode = 'supermarket'" :class="mode === 'supermarket' ? 'on-super' : ''">🛒 商超比价</button>
+        </div>
+        <div class="relative md:flex-1 md:max-w-[420px]">
+          <input v-model.trim="searchQuery" type="search" enterkeyhint="search"
+            placeholder="搜菜品，支持拼音首字母（如 xhs = 西红柿）"
+            class="w-full h-[34px] bg-[#111c31] border border-[#1e2b47] rounded-full pl-8 pr-8 text-[13px]
+                   text-[#e8eefb] placeholder-[#55688a] outline-none focus:border-[#34d399]/60">
+          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#55688a] text-[12px]">🔍</span>
+          <button v-if="searchQuery" @click="searchQuery = ''"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#55688a] text-[12px]">✕</button>
+        </div>
+        <div class="hidden lg:block ml-auto text-right text-[11px] text-[#55688a] leading-tight shrink-0">
+          <div>{{ tierCounts.real + tierCounts.partial }} 种实测 · {{ tierCounts.ref + tierCounts.mock }} 种指数推算</div>
+          <div class="text-[10px] text-[#475569]">推算品种不给位置百分位</div>
+        </div>
+      </div>
 
-    <!-- 搜索 -->
-    <div class="relative">
-      <input v-model.trim="searchQuery" type="text" placeholder="搜索菜品，支持拼音首字母（如 xhs）"
-        class="w-full bg-gray-100 rounded-full py-2 pl-9 pr-8 text-sm outline-none focus:ring-2 focus:ring-green-300">
-      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-      <button v-if="searchQuery" @click="searchQuery=''"
-        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">✕</button>
-    </div>
-
-    <!-- 数据来源筛选（每栏都标明官方出处） -->
-    <div v-if="dataSource === 'real'" class="mt-2.5 -mx-4 px-4 overflow-x-auto no-scrollbar">
-      <div class="flex gap-1.5 w-max">
-        <button @click="activeSource=''"
-          :class="activeSource==='' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200'"
-          class="text-[11px] px-2 py-1 rounded-full border font-medium transition-colors">
+      <!-- 数据来源 -->
+      <div v-if="dataSource === 'real'" class="mt-2 flex gap-1.5 overflow-x-auto no-scrollbar">
+        <button @click="activeSource = ''" class="pill" :class="activeSource === '' ? 'pill-on' : ''">
           全部来源 · {{ modeTotal }}
         </button>
-        <button v-for="s in sourceStats" :key="s.label" @click="activeSource = activeSource===s.label ? '' : s.label"
-          :class="activeSource===s.label ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200'"
-          class="text-[11px] px-2 py-1 rounded-full border font-medium transition-colors whitespace-nowrap">
+        <button v-for="s in sourceStats" :key="s.label"
+          @click="activeSource = activeSource === s.label ? '' : s.label"
+          class="pill" :class="activeSource === s.label ? 'pill-on' : ''">
           {{ s.label }} · {{ s.count }}
         </button>
       </div>
+
+      <!-- A-Z 首字母索引 -->
+      <div class="mt-2.5 flex items-start gap-2 pb-2.5">
+        <span class="text-[10px] text-[#55688a] shrink-0 mt-[7px]">首字母</span>
+        <div class="flex flex-wrap gap-1">
+          <button class="az" :class="activeLetter === '' ? 'az-on' : ''" @click="activeLetter = ''"
+            style="width:auto;padding:0 7px">全部</button>
+          <button v-for="l in letters" :key="l.letter" class="az"
+            :class="activeLetter === l.letter ? 'az-on' : ''"
+            @click="activeLetter = activeLetter === l.letter ? '' : l.letter">{{ l.letter }}</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= 吸顶筛选 ================= -->
+  <div class="sticky top-0 z-30 bg-[#0a1120]/95 backdrop-blur-md border-b border-[#16233c]">
+    <div class="mx-auto w-full max-w-[1560px] px-3 md:px-6 pt-2 flex gap-1.5 overflow-x-auto no-scrollbar">
+      <button v-for="c in categories" :key="c" class="pill"
+        :class="activeCategory === c ? 'pill-on' : ''" @click="activeCategory = c">{{ c }}</button>
+    </div>
+    <div class="mx-auto w-full max-w-[1560px] px-3 md:px-6 py-1.5 flex items-center gap-1">
+      <span class="text-[11px] text-[#55688a] shrink-0 mr-0.5">排序</span>
+      <button v-for="s in sorts" :key="s.key" class="sortbtn"
+        :class="sortMode === s.key ? 'sortbtn-on' : ''" @click="sortMode = s.key">{{ s.label }}</button>
+      <span class="ml-auto text-[11px] text-[#55688a] shrink-0 pl-2">{{ filteredItems.length }} 项</span>
+    </div>
+    <div v-if="sortMode === 'pos'" class="mx-auto w-full max-w-[1560px] px-3 md:px-6 pb-1.5 -mt-0.5">
+      <p class="text-[10px] text-[#7b8ca6] leading-tight">
+        按「位置」排序只对实测品种有效；推算品种无跨期实测价，排在列表末尾。
+      </p>
     </div>
   </div>
 
-  <!-- ===== 吸顶分类栏 ===== -->
-  <div class="sticky top-0 z-30 transition-all duration-200"
-    :class="scrolled ? 'bg-white/95 backdrop-blur shadow-md' : 'bg-white/95 backdrop-blur'">
-    <div class="px-4 pt-2 pb-1.5 flex gap-2 overflow-x-auto no-scrollbar">
-      <button v-for="cat in categories" :key="cat" @click="activeCategory=cat"
-        :class="activeCategory===cat
-          ? (mode==='market' ? 'bg-green-500 text-white border-green-500' : 'bg-blue-500 text-white border-blue-500')
-          : 'bg-white text-gray-600 border-gray-200'"
-        class="whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium border transition-colors shrink-0">
-        {{ cat }}
-      </button>
-    </div>
-    <div class="px-4 pb-2 flex items-center gap-3 text-[11px]">
-      <span class="text-gray-400 shrink-0">排序</span>
-      <button v-for="s in sorts" :key="s.key" @click="sortMode=s.key"
-        :class="sortMode===s.key ? (mode==='market'?'text-green-600 font-semibold':'text-blue-600 font-semibold') : 'text-gray-400'">
-        {{ s.label }}
-      </button>
-      <span class="ml-auto text-gray-300">{{ filteredItems.length }} 项</span>
-    </div>
-  </div>
-
-  <!-- ===== 列表 ===== -->
-  <main class="flex-1 px-4 py-3 space-y-3">
+  <!-- ================= 列表 ================= -->
+  <main class="mx-auto w-full max-w-[1560px] px-3 md:px-6 pt-3 pb-28">
 
     <!-- 骨架屏 -->
-    <template v-if="loading">
-      <div v-for="n in 3" :key="'sk'+n" class="bg-white rounded-2xl p-4 shadow-sm">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="skeleton h-4 w-20 rounded"></div>
-            <div class="skeleton h-3.5 w-10 rounded-full"></div>
-          </div>
-          <div class="skeleton h-4 w-4 rounded"></div>
+    <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 md:gap-3">
+      <div v-for="n in 8" :key="'sk' + n" class="card">
+        <div class="flex items-center gap-2">
+          <div class="skeleton h-4 w-20"></div><div class="skeleton h-3 w-12 rounded-full"></div>
         </div>
-        <div class="flex items-end justify-between mt-2.5">
-          <div>
-            <div class="skeleton h-7 w-24 rounded"></div>
-            <div class="skeleton h-3 w-32 rounded mt-2"></div>
-          </div>
-          <div class="skeleton h-8 w-24 rounded"></div>
-        </div>
+        <div class="skeleton h-6 w-24 mt-3"></div>
+        <div class="skeleton h-3 w-32 mt-2"></div>
         <div class="grid grid-cols-2 gap-3 mt-3">
-          <div><div class="skeleton h-3 w-20 rounded"></div><div class="skeleton h-1.5 w-full rounded-full mt-2"></div></div>
-          <div><div class="skeleton h-3 w-20 rounded"></div><div class="skeleton h-1.5 w-full rounded-full mt-2"></div></div>
+          <div><div class="skeleton h-2.5 w-16"></div><div class="skeleton h-1.5 w-full mt-2 rounded-full"></div></div>
+          <div><div class="skeleton h-2.5 w-16"></div><div class="skeleton h-1.5 w-full mt-2 rounded-full"></div></div>
         </div>
       </div>
-    </template>
-
-    <div v-else-if="filteredItems.length === 0" class="text-center text-gray-400 text-sm py-16">
-      没有找到相关菜品 🥲
     </div>
 
-    <template v-else>
-      <div v-for="item in filteredItems" :key="item.id"
+    <!-- 空态 -->
+    <div v-else-if="filteredItems.length === 0" class="py-20 text-center">
+      <div class="text-3xl mb-2">🥲</div>
+      <p class="text-[13px] text-[#7b8ca6]">没有匹配的品种</p>
+      <button class="btn-ghost mt-3" @click="resetFilters">清空筛选条件</button>
+    </div>
+
+    <!-- 卡片网格：手机单列 / 平板 2 列 / 桌面 3-4 列 -->
+    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 md:gap-3">
+      <article v-for="item in filteredItems" :key="item.name"
+        class="card card-press cursor-pointer select-none"
+        :class="[tierClass(item), isComparing(item) ? 'card-cmp' : '']"
         @click="onCardClick(item)"
-        @touchstart="pressStart(item)" @touchend="pressEnd" @touchmove="pressEnd" @touchcancel="pressEnd"
-        @mousedown="pressStart(item)" @mouseup="pressEnd" @mouseleave="pressEnd"
-        class="bg-white rounded-2xl p-3.5 shadow-sm card-press cursor-pointer select-none"
-        :class="isComparing(item) ? 'ring-2 ring-amber-400' : 'ring-1 ring-black/[0.03]'">
+        @touchstart.passive="pressStart(item)" @touchend="pressEnd" @touchmove.passive="pressEnd" @touchcancel="pressEnd"
+        @mousedown="pressStart(item)" @mouseup="pressEnd" @mouseleave="pressEnd">
 
-        <!-- 行1：名称 + 标签 + 收藏 -->
-        <div class="flex items-start justify-between gap-2">
-          <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span class="font-semibold text-[15px] text-gray-800 truncate">{{ item.name }}</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 shrink-0">{{ item.category }}</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 font-medium"
-              :class="sourceClass(item)">
-              {{ sourceLabel(item) }}
-            </span>
-            <span v-if="isComparing(item)" class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">对比中</span>
+        <!-- 名称 + 徽标 -->
+        <div class="flex items-start gap-1.5">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
+              <h3 class="truncate text-[15px] font-semibold text-[#e8eefb]">{{ item.name }}</h3>
+              <span v-if="tierName(item) !== 'real'" class="chip shrink-0"
+                :class="tierName(item) === 'ref' ? 'chip-ref'
+                     : tierName(item) === 'partial' ? 'chip-partial' : 'chip-mock'">{{ tierText(item) }}</span>
+              <span v-if="isComparing(item)" class="chip chip-cmp shrink-0">对比中</span>
+            </div>
+            <div class="mt-1 flex items-center gap-1 overflow-hidden">
+              <span class="chip chip-cat">{{ item.category }}</span>
+              <span class="chip" :class="sourceClass(item)">{{ sourceLabel(item) }}</span>
+            </div>
           </div>
-          <button @click.stop="toggleFav(item)" class="text-lg leading-none shrink-0 -mt-0.5">
-            <span :class="isFav(item) ? 'text-amber-400' : 'text-gray-300'">{{ isFav(item) ? '★' : '☆' }}</span>
-          </button>
+          <button @click.stop="toggleFav(item)" class="shrink-0 -mt-1 -mr-1 p-1 text-[15px] leading-none"
+            :class="isFav(item) ? 'text-[#f0b429]' : 'text-[#33425e]'">{{ isFav(item) ? '★' : '☆' }}</button>
         </div>
 
-        <!-- 行2：价格 + 涨跌角标 + 迷你走势 -->
-        <div class="flex items-end justify-between mt-1">
+        <!-- 价格 + 迷你走势 -->
+        <div class="mt-2 flex items-end justify-between gap-1.5">
           <div class="min-w-0">
-            <div class="flex items-baseline gap-1 flex-wrap">
-              <span class="text-[26px] leading-none font-bold text-gray-900 tracking-tight">
-                <span class="text-sm font-semibold">¥</span>{{ displayPrice(item).toFixed(2) }}
+            <div class="flex items-baseline gap-1">
+              <span class="text-[25px] md:text-[26px] leading-none font-bold tracking-tight text-white">
+                <span class="text-[13px] font-semibold text-[#93a4bf] align-[2px]">¥</span>{{ priceOf(item).toFixed(2) }}
               </span>
-              <span class="text-[10px] text-gray-400">元/500g</span>
-              <span class="ml-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-md"
-                :class="isReopen(item) ? 'bg-slate-100 text-slate-500'
-                      : change(item) > 0.005 ? 'bg-red-50 text-red-500'
-                      : change(item) < -0.005 ? 'bg-green-50 text-green-600'
-                      : 'bg-gray-100 text-gray-400'">
-                {{ isReopen(item) ? '季节性上市'
-                 : change(item) > 0.005 ? '+' + Math.abs(change(item)).toFixed(2) + '%'
-                 : change(item) < -0.005 ? '-' + Math.abs(change(item)).toFixed(2) + '%'
-                 : '持平' }}
-              </span>
+              <span class="text-[10px] text-[#55688a] whitespace-nowrap">元/500g</span>
             </div>
-            <div class="text-[11px] text-gray-400 mt-1.5">
-              <span v-if="isReopen(item)">
-                停报 {{ item.prevObsAge }} 周后重新上市 · 上次 ¥{{ item.prevObs.toFixed(2) }}
-              </span>
-              <span v-else-if="Math.abs(change(item)) < 0.005 && Math.abs(delta(item)) < 0.005">
-                {{ mode === 'supermarket' ? '市场价' : '' }}周环比 · 与上周持平
-              </span>
-              <template v-else>
-                {{ mode === 'supermarket' ? '市场价' : '' }}周环比
-                <span :class="change(item) > 0 ? 'text-red-500 font-medium' : 'text-green-600 font-medium'">
-                  {{ change(item) > 0 ? '+' : '' }}{{ change(item).toFixed(2) }}%
-                </span>
-                · 涨跌
-                <span :class="delta(item) > 0 ? 'text-red-500' : 'text-green-600'">
-                  {{ delta(item) > 0 ? '+' : '' }}{{ delta(item).toFixed(2) }}元
-                </span>
-              </template>
+            <div class="mt-1.5 flex items-center gap-1.5 min-w-0">
+              <span class="delta shrink-0" :class="deltaClass(item)">{{ deltaText(item) }}</span>
+              <span class="text-[10px] text-[#55688a] truncate">{{ deltaCaption(item) }}</span>
             </div>
           </div>
-
-          <!-- 迷你 sparkline（13 周） -->
-          <svg viewBox="0 0 100 34" class="w-[86px] h-[34px] shrink-0"
-            :class="change(item) > 0 ? 'text-red-400' : change(item) < 0 ? 'text-green-500' : 'text-gray-300'">
-            <polygon :points="sparkArea(item)" fill="currentColor" opacity="0.12"></polygon>
-            <polyline :points="sparkLine(item)" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          <svg v-if="sparkSegs(item).length" viewBox="0 0 100 34" class="w-[78px] md:w-[86px] h-[32px] shrink-0" preserveAspectRatio="none">
+            <polygon v-if="sparkArea(item)" :points="sparkArea(item)" :fill="sparkColor(item)" opacity="0.08"></polygon>
+            <polyline v-for="(seg, si) in sparkSegs(item)" :key="si" :points="seg" fill="none"
+              :stroke="sparkColor(item)" :stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+              :stroke-dasharray="tierName(item) === 'real' ? 'none' : '3 2.4'" opacity="0.9"></polyline>
           </svg>
+          <span v-else class="w-[78px] md:w-[86px] shrink-0 text-right text-[10px] text-[#3f4d68] leading-tight">
+            无连续<br>走势
+          </span>
         </div>
 
-        <!-- 行3：双百分位 / 价格平稳 -->
-        <div v-if="isStable(item)" class="mt-2.5 flex items-center gap-2">
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0">价格平稳</span>
-          <span class="text-[10px] text-gray-400 truncate">{{ rangeText(item, 52) }}</span>
-        </div>
-        <div v-else class="grid grid-cols-2 gap-3 mt-2.5">
+        <!-- 位置：仅实测品种给百分位 -->
+        <div v-if="tierName(item) === 'real' && !isStable(item)" class="mt-2.5 grid grid-cols-2 gap-2.5">
           <div>
-            <div class="flex items-baseline justify-between">
-              <span class="text-[10px] text-gray-400">近3个月位置</span>
-              <span class="text-[11px] font-semibold" :class="posColor(pct3(item))">{{ pct3(item) }}%</span>
+            <div class="flex items-baseline justify-between gap-1">
+              <span class="text-[10px] text-[#55688a]">近3月</span>
+              <span class="text-[11px] font-semibold" :class="posTextClass(pct3(item))">{{ pct3(item) }}%</span>
             </div>
-            <div class="relative h-1.5 rounded-full bg-gray-100 mt-1.5">
-              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct3(item))"
-                :style="{ width: pct3(item) + '%' }"></div>
-              <span class="absolute -top-[3px] w-3 h-3 rounded-full bg-white border-2 border-gray-300 shadow-sm"
-                :style="{ left: 'calc(' + pct3(item) + '% - 6px)' }"></span>
-            </div>
+            <div class="pbar"><i :style="{ width: pct3(item) + '%' }" :class="posBarClass(pct3(item))"></i>
+              <u :style="{ left: pct3(item) + '%' }"></u></div>
           </div>
           <div>
-            <div class="flex items-baseline justify-between">
-              <span class="text-[10px] text-gray-400">近1年位置</span>
-              <span class="text-[11px] font-semibold" :class="posColor(pct1y(item))">{{ pct1y(item) }}%</span>
+            <div class="flex items-baseline justify-between gap-1">
+              <span class="text-[10px] text-[#55688a]">近1年</span>
+              <span class="text-[11px] font-semibold" :class="posTextClass(pct1y(item))">{{ pct1y(item) }}%</span>
             </div>
-            <div class="relative h-1.5 rounded-full bg-gray-100 mt-1.5">
-              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct1y(item))"
-                :style="{ width: pct1y(item) + '%' }"></div>
-              <span class="absolute -top-[3px] w-3 h-3 rounded-full bg-white border-2 border-gray-300 shadow-sm"
-                :style="{ left: 'calc(' + pct1y(item) + '% - 6px)' }"></span>
-            </div>
+            <div class="pbar"><i :style="{ width: pct1y(item) + '%' }" :class="posBarClass(pct1y(item))"></i>
+              <u :style="{ left: pct1y(item) + '%' }"></u></div>
           </div>
         </div>
-
-        <!-- 行4：商超信息 -->
-        <div v-if="mode==='supermarket'" class="mt-2.5 pt-2 border-t border-gray-50 flex items-center gap-2 flex-wrap">
-          <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">{{ item.storeName }}</span>
-          <span v-if="priceDiff(item) > 0" class="text-[11px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-medium">
-            贵 ¥{{ priceDiff(item).toFixed(2) }}
-          </span>
-          <span v-else-if="priceDiff(item) < 0" class="text-[11px] px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-medium">
-            省 ¥{{ Math.abs(priceDiff(item)).toFixed(2) }}
-          </span>
-          <span v-else class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">持平</span>
-          <span class="text-[10px] text-gray-400">市场价 ¥{{ item.currentPrice.toFixed(2) }}</span>
+        <div v-else-if="isStable(item)" class="mt-2.5 flex items-center gap-1.5">
+          <span class="chip chip-flat shrink-0">价格平稳</span>
+          <span class="text-[10px] text-[#55688a] truncate">{{ rangeText(item, 52) }}</span>
         </div>
-      </div>
-    </template>
+        <div v-else class="mt-2.5 flex items-center gap-1.5">
+          <span class="chip chip-partial shrink-0">位置 —</span>
+          <span class="text-[10px] text-[#55688a] truncate">{{ noPosReason(item) }}</span>
+        </div>
 
-    <p v-if="!loading" class="text-center text-[10px] text-gray-400 pt-1 pb-2 leading-relaxed">
-      数据来源：武汉市发改委（每日零售价）· 农业农村局（批发价）· 商务局（周报）<br>
-      位置 = 当前价在 13 周 / 52 周区间的百分位（越高越贵）<br>
-      长按卡片可加入对比（选 2 个），点击查看走势图
-    </p>
+        <!-- 商超信息 -->
+        <div v-if="mode === 'supermarket'" class="mt-2 pt-1.5 border-t border-[#16233c] flex items-center gap-1.5 flex-wrap">
+          <span class="chip shrink-0" :class="isCheapestStore(item) ? 'chip-real' : 'chip-cat'">{{ item.storeName }}</span>
+          <span v-if="priceDiff(item) > 0.005" class="chip d-up">贵 ¥{{ priceDiff(item).toFixed(2) }}</span>
+          <span v-else-if="priceDiff(item) < -0.005" class="chip d-down">省 ¥{{ Math.abs(priceDiff(item)).toFixed(2) }}</span>
+          <span v-else class="chip d-flat">与市场价持平</span>
+          <span class="text-[10px] text-[#55688a] ml-auto">市场 ¥{{ item.currentPrice.toFixed(2) }}</span>
+        </div>
+      </article>
+    </div>
+
+    <!-- 页脚说明 -->
+    <div v-if="!loading" class="mt-5 pt-4 border-t border-[#16233c] space-y-1.5">
+      <p class="text-[11px] text-[#7b8ca6] leading-relaxed">
+        <b class="text-[#93a4bf]">数据来源</b>：武汉市发改委（每日零售价）· 武汉市农业农村局（批发价）· 武汉市商务局（周报）。
+        每天 06:00 自动更新，抓取失败时保留上一次数据。
+      </p>
+      <p class="text-[11px] text-[#7b8ca6] leading-relaxed">
+        <b class="text-[#93a4bf]">位置</b>：当前价在近 13 周 / 52 周区间内的百分位，越高代表越接近区间高点。
+        仅对<b class="text-[#34d399]">实测</b>品种计算；<b class="text-[#f0b429]">推算</b>品种（无逐周实测价）显示「—」，不参与位置判断与涨跌榜排名。
+      </p>
+      <p class="text-[11px] text-[#5f7192] leading-relaxed">
+        52 周波动小于 1.5% 判为「价格平稳」，不展示百分位；整月停报后重新上市的品种标注「季节性上市」，不计入涨跌榜。
+        长按卡片可加入对比（选 2 个），点击查看走势图。
+      </p>
+    </div>
   </main>
 
-  <footer class="text-center text-[10px] text-gray-300 py-3">武汉菜篮子 · 数据来自政府公开公示</footer>
-
-  <!-- 对比浮动条 -->
+  <!-- 对比浮条 -->
   <transition name="fade">
-    <div v-if="compareList.length" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md">
-      <div class="bg-gray-900/90 backdrop-blur text-white rounded-2xl px-4 py-2.5 flex items-center gap-3 shadow-xl">
-        <span class="text-xs shrink-0">已选 {{ compareList.length }}/2</span>
-        <span class="text-[11px] text-gray-300 truncate flex-1">{{ compareNames }}</span>
-        <button @click="clearCompare" class="text-[11px] px-2 py-1 rounded-full bg-white/15 shrink-0">清除</button>
+    <div v-if="compareList.length" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md">
+      <div class="bg-[#16233c] border border-[#2c3d60] rounded-xl px-3.5 py-2.5 flex items-center gap-3 shadow-2xl">
+        <span class="text-[11px] text-[#e8eefb] shrink-0">已选 {{ compareList.length }}/2</span>
+        <span class="text-[11px] text-[#93a4bf] truncate flex-1">{{ compareNames }}</span>
+        <button @click="clearCompare" class="text-[11px] px-2.5 py-1 rounded-full bg-[#1e2b47] text-[#cbd5e1] shrink-0">清除</button>
       </div>
     </div>
   </transition>
 
-  <!-- ===== 涨跌榜 ===== -->
-  <transition name="fade"><div v-if="rankVisible" @click="rankVisible=false" class="fixed inset-0 bg-black/40 z-40"></div></transition>
-  <transition name="sheet">
-    <div v-if="rankVisible" class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-50 max-h-[78vh] flex flex-col">
-      <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3"></div>
-      <div class="px-5 pt-3 pb-2">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-bold text-gray-800">今日涨跌榜</h3>
-          <button @click="rankVisible=false" class="text-gray-400 text-lg leading-none">✕</button>
+  <!-- ================= 涨跌榜 ================= -->
+  <transition name="fade">
+    <div v-if="rankVisible" @click="rankVisible = false" class="fixed inset-0 z-50 bg-[#03070f]/80"></div>
+  </transition>
+  <div v-if="rankVisible" class="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-6 pointer-events-none">
+    <div class="dialog pointer-events-auto relative w-full md:w-[560px] max-h-[80vh] md:max-h-[78vh]
+                bg-[#0d1526] border border-[#1e2b47] rounded-t-2xl md:rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-4 md:px-5 pt-3.5 md:pt-4 pb-2 border-b border-[#16233c] shrink-0">
+        <div class="flex items-center justify-between">
+          <h3 class="text-[15px] font-bold text-[#e8eefb]">今日涨跌榜</h3>
+          <button @click="rankVisible = false" class="text-[#55688a] text-[15px] leading-none px-1">✕</button>
         </div>
-        <div class="flex gap-2 mb-3">
-          <button @click="rankTab='up'"
-            :class="rankTab==='up' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500'"
-            class="flex-1 py-1.5 rounded-full text-xs font-medium">涨幅 TOP10</button>
-          <button @click="rankTab='down'"
-            :class="rankTab==='down' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'"
-            class="flex-1 py-1.5 rounded-full text-xs font-medium">跌幅 TOP10</button>
+        <div class="mt-2.5 flex gap-2">
+          <button @click="rankTab = 'up'" class="sortbtn flex-1 h-7"
+            :class="rankTab === 'up' ? 'bg-[#f87171]/15 text-[#f87171] font-semibold' : 'bg-[#111c31]'">涨幅 TOP10</button>
+          <button @click="rankTab = 'down'" class="sortbtn flex-1 h-7"
+            :class="rankTab === 'down' ? 'bg-[#34d399]/15 text-[#34d399] font-semibold' : 'bg-[#111c31]'">跌幅 TOP10</button>
         </div>
-        <div class="flex gap-3 text-[11px] text-gray-400">
-          <span>涨 <b class="text-red-500">{{ stats.up }}</b></span>
-          <span>跌 <b class="text-green-600">{{ stats.down }}</b></span>
-          <span>平 <b class="text-gray-500">{{ stats.flat }}</b></span>
-          <span class="ml-auto text-gray-300">周环比 · 已排除季节性重新上市</span>
+        <div class="mt-2 flex gap-3 text-[11px] text-[#7b8ca6]">
+          <span>涨 <b class="text-[#f87171]">{{ stats.up }}</b></span>
+          <span>跌 <b class="text-[#34d399]">{{ stats.down }}</b></span>
+          <span>平 <b class="text-[#93a4bf]">{{ stats.flat }}</b></span>
+          <span class="ml-auto text-[10px] text-[#55688a]">仅实测 {{ realCount }} 种参与</span>
         </div>
       </div>
-      <div class="overflow-y-auto px-5 pb-8">
-        <div v-for="(it, i) in rankList" :key="'rk'+it.id"
-          @click="rankVisible=false; openDetail([it])"
-          class="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
-          <span class="w-5 text-center text-xs font-bold"
-            :class="i < 3 ? (rankTab==='up' ? 'text-red-500' : 'text-green-600') : 'text-gray-300'">{{ i + 1 }}</span>
+      <div class="flex-1 overflow-y-auto px-4 md:px-5 pb-5">
+        <div v-for="(it, i) in rankList" :key="'rk' + it.name"
+          @click="rankVisible = false; openDetail([it])"
+          class="flex items-center gap-2.5 py-2.5 border-b border-[#16233c] last:border-0 cursor-pointer">
+          <span class="w-5 text-center text-[12px] font-bold"
+            :class="i < 3 ? (rankTab === 'up' ? 'text-[#f87171]' : 'text-[#34d399]') : 'text-[#475569]'">{{ i + 1 }}</span>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1.5">
-              <span class="text-sm font-medium text-gray-800 truncate">{{ it.name }}</span>
-              <span class="text-[10px] text-gray-400">{{ it.category }}</span>
+              <span class="text-[13px] font-medium text-[#e8eefb] truncate">{{ it.name }}</span>
+              <span class="text-[10px] text-[#55688a]">{{ it.category }}</span>
+              <span v-if="isReopen(it)" class="chip chip-flat shrink-0">季节性</span>
             </div>
-            <div class="text-[10px] text-gray-400 mt-0.5">¥{{ it.currentPrice.toFixed(2) }} / 500g</div>
+            <div class="text-[10px] text-[#55688a] mt-0.5">¥{{ it.currentPrice.toFixed(2) }} / 500g · {{ sourceLabel(it) }}</div>
           </div>
-          <span class="text-sm font-bold" :class="change(it) > 0 ? 'text-red-500' : 'text-green-600'">
+          <span class="text-[13px] font-bold" :class="change(it) > 0 ? 'text-[#f87171]' : 'text-[#34d399]'">
             {{ change(it) > 0 ? '+' : '' }}{{ change(it).toFixed(2) }}%
           </span>
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- ================= 详情（手机底部抽屉 / 桌面居中 Modal） ================= -->
+  <transition name="fade">
+    <div v-if="detailVisible" @click="closeDetail" class="fixed inset-0 z-50 bg-[#03070f]/85"></div>
   </transition>
+  <div v-if="detailVisible" class="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-6 pointer-events-none">
+    <div class="dialog pointer-events-auto relative w-full md:w-[900px] max-h-[92vh] md:max-h-[86vh]
+                bg-[#0d1526] border border-[#1e2b47] rounded-t-2xl md:rounded-2xl flex flex-col overflow-hidden shadow-2xl">
 
-  <!-- ===== 详情抽屉（图表）===== -->
-  <transition name="fade"><div v-if="drawerVisible" @click="closeDrawer" class="fixed inset-0 bg-black/40 z-40"></div></transition>
-  <transition name="sheet">
-    <div v-if="drawerVisible" class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white rounded-t-3xl z-50 flex flex-col max-h-[88vh]">
-      <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 shrink-0"></div>
-      <div class="px-5 pt-3 pb-2 overflow-y-auto">
-        <div class="flex items-start justify-between">
-          <div class="min-w-0">
-            <div class="font-bold text-lg text-gray-800 truncate">
-              {{ activeItems.map(i => i.name).join('  vs  ') }}
+      <!-- 头部 -->
+      <div class="px-4 md:px-6 pt-3.5 md:pt-4 pb-2.5 border-b border-[#16233c] shrink-0">
+        <div class="flex items-start gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <h3 class="text-[16px] md:text-lg font-bold text-[#e8eefb] truncate">
+                {{ detailItems.map(i => i.name).join('  vs  ') }}
+              </h3>
+              <span v-for="it in detailItems" :key="'b' + it.name" v-show="tierName(it) !== 'real'" class="chip"
+                :class="tierName(it) === 'ref' ? 'chip-ref' : tierName(it) === 'partial' ? 'chip-partial' : 'chip-mock'">
+                {{ tierText(it) }}
+              </span>
             </div>
-            <div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span>{{ activeItems.length > 1 ? '长按选中 · 双品对比' : (activeItems[0] ? activeItems[0].category + ' · ' + activeItems[0].unit : '') }}</span>
-              <span v-if="activeItems.length === 1 && activeItems[0]"
-                class="px-1.5 py-0.5 rounded-full border font-medium"
-                :class="sourceClass(activeItems[0])">{{ sourceLabel(activeItems[0]) }}</span>
-              <span v-if="activeItems.length === 1 && activeItems[0] && activeItems[0].updated"
-                class="text-gray-300">{{ activeItems[0].updated }}</span>
+            <div class="mt-1 flex items-center gap-1.5 flex-wrap text-[10px] text-[#55688a]">
+              <template v-if="detailItems.length === 1 && detailItems[0]">
+                <span class="chip chip-cat">{{ detailItems[0].category }}</span>
+                <span class="chip" :class="sourceClass(detailItems[0])">{{ sourceLabel(detailItems[0]) }}</span>
+                <span>更新 {{ detailItems[0].updated || '—' }}</span>
+              </template>
+              <span v-else>长按选中 · 双品种对比</span>
             </div>
           </div>
-          <button @click="closeDrawer" class="text-gray-400 text-lg leading-none shrink-0">✕</button>
-        </div>
-
-        <!-- 价格块（单品种） -->
-        <div v-if="activeItems.length === 1 && activeItems[0]" class="flex items-end gap-3 mt-2.5">
-          <div>
-            <span class="text-3xl font-bold text-gray-900 tracking-tight">
-              <span class="text-base font-semibold">¥</span>{{ displayPrice(activeItems[0]).toFixed(2) }}
-            </span>
-            <span class="text-[10px] text-gray-400 ml-1">元/500g</span>
-          </div>
-          <div class="pb-1 text-[11px] text-gray-400">
-            周环比
-            <span :class="change(activeItems[0]) > 0 ? 'text-red-500 font-semibold' : 'text-green-600 font-semibold'">
-              {{ change(activeItems[0]) > 0 ? '+' : '' }}{{ change(activeItems[0]).toFixed(2) }}%
-            </span>
-          </div>
-        </div>
-
-        <!-- 双百分位（单品种）：价格近乎不动时百分位无意义 -->
-        <div v-if="activeItems.length === 1 && activeItems[0] && isStable(activeItems[0])"
-          class="mt-3 bg-slate-50 rounded-xl p-3 flex items-center gap-2">
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 shrink-0">价格平稳</span>
-          <span class="text-[11px] text-slate-500">近一年几乎无波动 · {{ rangeText(activeItems[0], 52) }}</span>
-        </div>
-        <div v-else-if="activeItems.length === 1 && activeItems[0]" class="grid grid-cols-2 gap-2.5 mt-3">
-          <div class="bg-gray-50 rounded-xl p-2.5">
-            <div class="text-[10px] text-gray-400">近3个月位置（13周）</div>
-            <div class="text-lg font-bold" :class="posColor(pct3(activeItems[0]))">{{ pct3(activeItems[0]) }}%</div>
-            <div class="relative h-1.5 rounded-full bg-gray-200 mt-1">
-              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct3(activeItems[0]))"
-                :style="{ width: pct3(activeItems[0]) + '%' }"></div>
-            </div>
-            <div class="text-[9px] text-gray-400 mt-1.5 truncate">{{ rangeText(activeItems[0], 13) }}</div>
-          </div>
-          <div class="bg-gray-50 rounded-xl p-2.5">
-            <div class="text-[10px] text-gray-400">近1年位置（52周）</div>
-            <div class="text-lg font-bold" :class="posColor(pct1y(activeItems[0]))">{{ pct1y(activeItems[0]) }}%</div>
-            <div class="relative h-1.5 rounded-full bg-gray-200 mt-1">
-              <div class="absolute inset-y-0 left-0 rounded-full" :class="posBar(pct1y(activeItems[0]))"
-                :style="{ width: pct1y(activeItems[0]) + '%' }"></div>
-            </div>
-            <div class="text-[9px] text-gray-400 mt-1.5 truncate">{{ rangeText(activeItems[0], 52) }}</div>
-          </div>
-        </div>
-
-        <div class="text-[11px] text-gray-500 mt-3 mb-1 font-medium">
-          近 52 周价格走势 · 双指可缩放，按住拖动查看数值
-        </div>
-        <div ref="chartEl" class="w-full h-60"></div>
-        <div class="text-[10px] text-gray-400 leading-relaxed mt-1">
-          红点 = 区间最高价，绿点 = 区间最低价；竖向虚线为当前查看位置。
+          <button @click="closeDetail" class="text-[#55688a] text-[16px] leading-none px-1 shrink-0">✕</button>
         </div>
       </div>
-      <div class="px-5 pt-2 pb-6 shrink-0">
-        <button @click="closeDrawer" class="w-full py-2.5 rounded-full bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200">
-          关闭
+
+      <!-- 主体 -->
+      <div class="flex-1 overflow-y-auto px-4 md:px-6 py-3">
+        <div class="md:grid md:grid-cols-[minmax(0,272px)_1fr] md:gap-6">
+
+          <!-- 左列：价格与位置 -->
+          <div>
+            <div v-if="detailItems.length === 1 && detailItems[0]">
+              <div class="flex items-baseline gap-1.5">
+                <span class="text-[34px] leading-none font-bold tracking-tight text-white">
+                  <span class="text-[15px] font-semibold text-[#93a4bf] align-[3px]">¥</span>{{ priceOf(detailItems[0]).toFixed(2) }}
+                </span>
+                <span class="text-[11px] text-[#55688a]">元/500g</span>
+              </div>
+              <div class="mt-2 flex items-center gap-1.5">
+                <span class="delta" :class="deltaClass(detailItems[0])">{{ deltaText(detailItems[0]) }}</span>
+                <span class="text-[11px] text-[#55688a]">{{ deltaCaption(detailItems[0]) }}</span>
+              </div>
+            </div>
+
+            <!-- 双品种对比价 -->
+            <div v-else class="space-y-2">
+              <div v-for="(it, i) in detailItems" :key="'c' + it.name"
+                class="flex items-center gap-2 bg-[#111c31] border border-[#1e2b47] rounded-lg px-3 py-2">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" :style="{ background: i === 0 ? '#34d399' : '#60a5fa' }"></span>
+                <span class="text-[12px] text-[#cbd5e1] truncate flex-1">{{ it.name }}</span>
+                <span class="text-[15px] font-bold text-white">¥{{ priceOf(it).toFixed(2) }}</span>
+              </div>
+              <p v-if="compareGap !== null" class="text-[10px] text-[#7b8ca6]">
+                价差 ¥{{ Math.abs(compareGap).toFixed(2) }}（{{ compareGap > 0 ? '前者更贵' : '后者更贵' }}）
+              </p>
+            </div>
+
+            <!-- 位置卡：实测才有数 -->
+            <div v-if="singleIsReal && !isStable(detailItems[0])" class="mt-3 grid grid-cols-2 gap-2">
+              <div class="bg-[#111c31] border border-[#1e2b47] rounded-xl p-2.5">
+                <div class="text-[10px] text-[#55688a]">近 3 个月位置</div>
+                <div class="text-[17px] font-bold leading-tight mt-0.5" :class="posTextClass(pct3(detailItems[0]))">
+                  {{ pct3(detailItems[0]) }}%
+                </div>
+                <div class="pbar"><i :style="{ width: pct3(detailItems[0]) + '%' }" :class="posBarClass(pct3(detailItems[0]))"></i></div>
+                <div class="text-[9px] text-[#55688a] mt-1.5 truncate">{{ rangeText(detailItems[0], 13) }}</div>
+              </div>
+              <div class="bg-[#111c31] border border-[#1e2b47] rounded-xl p-2.5">
+                <div class="text-[10px] text-[#55688a]">近 1 年位置</div>
+                <div class="text-[17px] font-bold leading-tight mt-0.5" :class="posTextClass(pct1y(detailItems[0]))">
+                  {{ pct1y(detailItems[0]) }}%
+                </div>
+                <div class="pbar"><i :style="{ width: pct1y(detailItems[0]) + '%' }" :class="posBarClass(pct1y(detailItems[0]))"></i></div>
+                <div class="text-[9px] text-[#55688a] mt-1.5 truncate">{{ rangeText(detailItems[0], 52) }}</div>
+              </div>
+            </div>
+            <div v-else-if="singleIsReal && isStable(detailItems[0])"
+              class="mt-3 bg-[#111c31] border border-[#1e2b47] rounded-xl p-3 flex items-center gap-2">
+              <span class="chip chip-flat shrink-0">价格平稳</span>
+              <span class="text-[11px] text-[#93a4bf]">近一年几乎无波动 · {{ rangeText(detailItems[0], 52) }}</span>
+            </div>
+            <div v-else-if="detailItems.length === 1"
+              class="mt-3 bg-[#111c31] border border-dashed border-[#2c3d60] rounded-xl p-3">
+              <div class="flex items-center gap-1.5">
+                <span class="chip chip-partial">位置 —</span>
+                <span class="text-[11px] text-[#7b8ca6]">不计算百分位</span>
+              </div>
+              <p class="text-[10px] text-[#7b8ca6] leading-relaxed mt-1.5">{{ detailDataNote }}</p>
+            </div>
+
+            <!-- 商超 -->
+            <div v-if="detailItems.length === 1 && hasSuper(detailItems[0])"
+              class="mt-2 bg-[#111c31] border border-[#1e2b47] rounded-xl p-2.5">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-[#55688a]">商超</span>
+                <span class="chip chip-cat">{{ detailItems[0].storeName }}</span>
+              </div>
+              <div class="mt-1.5 flex items-baseline gap-2">
+                <span class="text-[15px] font-bold text-white">¥{{ detailItems[0].supermarketPrice.toFixed(2) }}</span>
+                <span class="chip" :class="priceDiff(detailItems[0]) > 0.005 ? 'd-up' : priceDiff(detailItems[0]) < -0.005 ? 'd-down' : 'd-flat'">
+                  {{ priceDiff(detailItems[0]) > 0.005 ? '比市场贵 ¥' + priceDiff(detailItems[0]).toFixed(2)
+                   : priceDiff(detailItems[0]) < -0.005 ? '比市场省 ¥' + Math.abs(priceDiff(detailItems[0])).toFixed(2)
+                   : '与市场持平' }}
+                </span>
+              </div>
+              <p class="text-[10px] text-[#55688a] mt-1">
+                两家监测点（中百仓储 / 沃尔玛）取最低价，同价时取中百。
+              </p>
+            </div>
+
+            <!-- 数据说明 -->
+            <p class="text-[10px] text-[#55688a] leading-relaxed mt-3">
+              单位 500g，价格为政府公示口径，仅供参考。
+            </p>
+          </div>
+
+          <!-- 右列：52 周走势 -->
+          <div class="mt-4 md:mt-0">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] text-[#93a4bf] font-medium">近 52 周价格走势</span>
+              <span v-if="chartBadge" class="chip chip-ref">{{ chartBadge }}</span>
+            </div>
+            <div ref="chartEl" class="w-full h-[230px] md:h-[318px] mt-1"></div>
+            <div class="text-[10px] text-[#55688a] leading-relaxed">
+              {{ chartCaption }}
+              <span v-if="gapCount" class="text-[#f0b429]">图中断档 {{ gapCount }} 周，缺数据不连线。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部 -->
+      <div class="shrink-0 px-4 md:px-6 py-2.5 border-t border-[#16233c] flex gap-2">
+        <button @click="toggleFav(detailItems[0])" v-if="detailItems.length === 1"
+          class="btn-ghost flex-1 md:flex-none md:px-4"
+          :class="isFav(detailItems[0]) ? 'text-[#f0b429] border-[#f0b429]/40' : ''">
+          {{ isFav(detailItems[0]) ? '★ 已收藏' : '☆ 收藏' }}
         </button>
+        <button @click="closeDetail" class="btn-ghost flex-1 md:flex-none md:px-6">关闭</button>
       </div>
     </div>
-  </transition>
+  </div>
 
   <!-- Toast -->
   <transition name="fade">
-    <div v-if="toast" class="fixed top-1/3 left-1/2 -translate-x-1/2 z-[60] bg-gray-900/88 text-white text-xs px-4 py-2 rounded-full shadow-lg whitespace-nowrap">
-      {{ toast }}
-    </div>
+    <div v-if="toast" class="fixed top-1/3 left-1/2 -translate-x-1/2 z-[60] bg-[#16233c] border border-[#2c3d60]
+      text-[#e8eefb] text-[11px] px-3.5 py-2 rounded-full shadow-xl whitespace-nowrap">{{ toast }}</div>
   </transition>
 </div>
 
 <script>
 /* =========================================================
- * 兜底模拟数据（data.json 读取失败时使用，结构与 data.json 一致）
- * 字段：id / name / pinyin / category / unit / currentPrice
- *      supermarketPrice / storeName / yearPosition / history[52]
+ * 兜底演示数据（data.json 读不到时使用，结构与 data.json 一致）
+ * historyReal 缺失 → 一律按「推算」处理，前端不会给假百分位
  * ========================================================= */
 const MOCK_ITEMS = [
-  { id:1, name:'西红柿', pinyin:'xhs', category:'蔬菜', unit:'500g', currentPrice:4.50, supermarketPrice:5.80,
-    storeName:'盒马', yearPosition:78,
-    history:[3.10,3.15,3.22,3.30,3.45,3.60,3.80,3.95,4.10,4.05,3.90,3.70,3.50,3.30,3.05,2.85,2.70,2.60,2.55,2.50,2.45,2.50,2.60,2.75,2.90,3.05,3.15,3.20,3.10,3.00,2.95,3.00,3.10,3.25,3.40,3.55,3.70,3.85,3.95,4.00,3.95,3.90,3.95,4.05,4.15,4.25,4.35,4.40,4.45,4.48,4.50,4.50] },
-  { id:2, name:'鸡蛋', pinyin:'jd', category:'肉禽蛋', unit:'500g', currentPrice:4.20, supermarketPrice:3.99,
-    storeName:'小象超市', yearPosition:22,
-    history:[4.80,4.85,4.90,4.95,5.00,5.05,5.10,5.05,4.95,4.85,4.75,4.65,4.55,4.50,4.45,4.40,4.35,4.30,4.35,4.40,4.45,4.50,4.55,4.60,4.55,4.50,4.45,4.40,4.35,4.30,4.25,4.20,4.15,4.10,4.15,4.20,4.25,4.30,4.25,4.20,4.18,4.15,4.12,4.10,4.15,4.18,4.22,4.25,4.22,4.20,4.20,4.20] },
-  { id:3, name:'草鱼', pinyin:'cy', category:'水产', unit:'500g', currentPrice:9.80, supermarketPrice:12.50,
-    storeName:'盒马', yearPosition:55,
-    history:[8.50,8.60,8.75,8.90,9.05,9.20,9.35,9.50,9.60,9.55,9.45,9.35,9.25,9.15,9.05,8.95,8.85,8.80,8.75,8.85,8.95,9.10,9.25,9.40,9.55,9.65,9.75,9.85,9.95,10.05,9.95,9.80,9.65,9.50,9.45,9.40,9.50,9.60,9.70,9.75,9.80,9.85,9.90,9.85,9.75,9.70,9.65,9.70,9.75,9.80,9.78,9.80] },
-  { id:4, name:'大白菜', pinyin:'dbc', category:'蔬菜', unit:'500g', currentPrice:1.80, supermarketPrice:1.50,
-    storeName:'小象超市', yearPosition:15,
-    history:[2.60,2.55,2.50,2.45,2.40,2.30,2.20,2.10,2.00,1.95,1.90,1.85,1.80,1.75,1.70,1.65,1.60,1.58,1.55,1.60,1.65,1.70,1.75,1.80,1.85,1.90,1.95,2.00,2.05,2.10,2.05,1.98,1.92,1.86,1.80,1.75,1.72,1.70,1.68,1.66,1.65,1.68,1.70,1.72,1.75,1.78,1.80,1.82,1.80,1.79,1.80,1.80] },
-  { id:5, name:'东北大米', pinyin:'dbdm', category:'米面粮油', unit:'500g', currentPrice:3.20, supermarketPrice:3.59,
-    storeName:'盒马', yearPosition:63,
-    history:[2.85,2.86,2.88,2.90,2.92,2.95,2.98,3.00,3.02,3.05,3.08,3.10,3.08,3.05,3.03,3.00,3.02,3.05,3.08,3.10,3.12,3.15,3.13,3.10,3.08,3.10,3.12,3.15,3.18,3.20,3.22,3.20,3.18,3.15,3.18,3.20,3.22,3.25,3.22,3.20,3.18,3.20,3.22,3.25,3.28,3.25,3.22,3.20,3.22,3.20,3.19,3.20] },
-  { id:6, name:'猪后腿肉', pinyin:'zhtm', category:'肉禽蛋', unit:'500g', currentPrice:15.80, supermarketPrice:14.50,
-    storeName:'小象超市', yearPosition:30,
-    history:[19.50,19.20,18.90,18.50,18.20,17.80,17.50,17.20,16.90,16.60,16.30,16.00,15.80,15.60,15.40,15.20,15.00,14.80,14.60,14.80,15.00,15.20,15.40,15.60,15.80,16.00,16.20,16.40,16.60,16.50,16.30,16.10,15.90,15.70,15.50,15.60,15.70,15.80,15.90,16.00,15.90,15.80,15.70,15.60,15.70,15.80,15.90,16.00,15.90,15.85,15.80,15.80] }
+  { id: 1, name: '西红柿', pinyin: 'xhs', category: '蔬菜', unit: '500g', currentPrice: 4.50,
+    supermarketPrice: 5.80, storeName: '中百仓储', historyReal: false,
+    history: [3.10,3.15,3.22,3.30,3.45,3.60,3.80,3.95,4.10,4.05,3.90,3.70,3.50,3.30,3.05,2.85,2.70,2.60,2.55,2.50,2.45,2.50,2.60,2.75,2.90,3.05,3.15,3.20,3.10,3.00,2.95,3.00,3.10,3.25,3.40,3.55,3.70,3.85,3.95,4.00,3.95,3.90,3.95,4.05,4.15,4.25,4.35,4.40,4.45,4.48,4.50,4.50] },
+  { id: 2, name: '鸡蛋', pinyin: 'jd', category: '肉禽蛋', unit: '500g', currentPrice: 4.20,
+    supermarketPrice: 3.99, storeName: '沃尔玛', historyReal: false,
+    history: [4.80,4.85,4.90,4.95,5.00,5.05,5.10,5.05,4.95,4.85,4.75,4.65,4.55,4.50,4.45,4.40,4.35,4.30,4.35,4.40,4.45,4.50,4.55,4.60,4.55,4.50,4.45,4.40,4.35,4.30,4.25,4.20,4.15,4.10,4.15,4.20,4.25,4.30,4.25,4.20,4.18,4.15,4.12,4.10,4.15,4.18,4.22,4.25,4.22,4.20,4.20,4.20] },
+  { id: 3, name: '草鱼', pinyin: 'cy', category: '水产', unit: '500g', currentPrice: 9.80,
+    supermarketPrice: 12.50, storeName: '中百仓储', historyReal: false,
+    history: [8.50,8.60,8.75,8.90,9.05,9.20,9.35,9.50,9.60,9.55,9.45,9.35,9.25,9.15,9.05,8.95,8.85,8.80,8.75,8.85,8.95,9.10,9.25,9.40,9.55,9.65,9.75,9.85,9.95,10.05,9.95,9.80,9.65,9.50,9.45,9.40,9.50,9.60,9.70,9.75,9.80,9.85,9.90,9.85,9.75,9.70,9.65,9.70,9.75,9.80,9.78,9.80] },
+  { id: 4, name: '大白菜', pinyin: 'dbc', category: '蔬菜', unit: '500g', currentPrice: 1.80,
+    supermarketPrice: 1.50, storeName: '沃尔玛', historyReal: false,
+    history: [2.60,2.55,2.50,2.45,2.40,2.30,2.20,2.10,2.00,1.95,1.90,1.85,1.80,1.75,1.70,1.65,1.60,1.58,1.55,1.60,1.65,1.70,1.75,1.80,1.85,1.90,1.95,2.00,2.05,2.10,2.05,1.98,1.92,1.86,1.80,1.75,1.72,1.70,1.68,1.66,1.65,1.68,1.70,1.72,1.75,1.78,1.80,1.82,1.80,1.79,1.80,1.80] },
+  { id: 5, name: '东北大米', pinyin: 'dbdm', category: '米面粮油', unit: '500g', currentPrice: 3.20,
+    supermarketPrice: 3.59, storeName: '中百仓储', historyReal: false,
+    history: [2.85,2.86,2.88,2.90,2.92,2.95,2.98,3.00,3.02,3.05,3.08,3.10,3.08,3.05,3.03,3.00,3.02,3.05,3.08,3.10,3.12,3.15,3.13,3.10,3.08,3.10,3.12,3.15,3.18,3.20,3.22,3.20,3.18,3.15,3.18,3.20,3.22,3.25,3.22,3.20,3.18,3.20,3.22,3.25,3.28,3.25,3.22,3.20,3.22,3.20,3.19,3.20] },
+  { id: 6, name: '猪后腿肉', pinyin: 'zhtm', category: '肉禽蛋', unit: '500g', currentPrice: 15.80,
+    supermarketPrice: 14.50, storeName: '沃尔玛', historyReal: false,
+    history: [19.50,19.20,18.90,18.50,18.20,17.80,17.50,17.20,16.90,16.60,16.30,16.00,15.80,15.60,15.40,15.20,15.00,14.80,14.60,14.80,15.00,15.20,15.40,15.60,15.80,16.00,16.20,16.40,16.60,16.50,16.30,16.10,15.90,15.70,15.50,15.60,15.70,15.80,15.90,16.00,15.90,15.80,15.70,15.60,15.70,15.80,15.90,16.00,15.90,15.85,15.80,15.80] }
 ];
 
 const FAV_KEY = 'wh_cailanzi_favorites';
-const SPARK_LEN = 13;      // 卡片迷你走势：最近 13 周
-let chartInstance = null;  // ECharts 实例（非响应式）
+const SPARK_LEN = 13;
+let chartInstance = null;
 
-/* 把价格序列归一化成 SVG 坐标（100×34 视口） */
-function sparkPoints(hist, withArea) {
+/* ---------- 日期工具（用 updated 反推周序，避免编造日期） ---------- */
+function parseYmd(s) {
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+function shiftDays(d, n) {
+  const x = new Date(d.getTime());
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function mmdd(d) {
+  return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/* 序列里的空档：null / undefined / 非数字 / <=0 都算缺数据，绝不补值 */
+function isGap(v) {
+  return v === null || v === undefined || v === '' || !isFinite(v) || Number(v) <= 0;
+}
+
+/* 迷你走势：按缺数据切段，段内不跨越空档 */
+function sparkSegments(hist) {
   const data = (hist || []).slice(-SPARK_LEN);
-  if (data.length < 2) return '';
+  if (data.length < 2) return [];
+  const valid = data.filter(v => !isGap(v)).map(Number);
+  if (valid.length < 2) return [];
   const W = 100, H = 34, PAD = 3;
-  const min = Math.min(...data), max = Math.max(...data);
+  const min = Math.min(...valid), max = Math.max(...valid);
   const rng = (max - min) || 1;
-  const pts = data.map((v, i) => {
+  const xy = data.map((v, i) => {
+    if (isGap(v)) return null;
     const x = PAD + i * (W - PAD * 2) / (data.length - 1);
-    const y = H - PAD - ((v - min) / rng) * (H - PAD * 2);
+    const y = H - PAD - ((Number(v) - min) / rng) * (H - PAD * 2);
     return [x.toFixed(1), y.toFixed(1)];
   });
-  if (!withArea) return pts.map(p => p.join(',')).join(' ');
-  const firstX = pts[0][0], lastX = pts[pts.length - 1][0];
-  return [[firstX, H], ...pts, [lastX, H]].map(p => p.join(',')).join(' ');
+  const segs = [];
+  let cur = [];
+  xy.forEach(p => {
+    if (p === null) { if (cur.length > 1) segs.push(cur); cur = []; }
+    else cur.push(p);
+  });
+  if (cur.length > 1) segs.push(cur);
+  return segs.map(s => s.map(p => p.join(',')).join(' '));
 }
 
 const { createApp } = Vue;
@@ -473,21 +659,21 @@ const vm = createApp({
       mode: 'market',
       searchQuery: '',
       activeCategory: '全部',
-      categories: ['全部', '蔬菜', '肉禽蛋', '水产', '米面粮油', '豆制品'],
+      activeLetter: '',
+      sortMode: 'default',
       sorts: [
         { key: 'default', label: '默认' },
         { key: 'up', label: '涨幅' },
-        { key: 'down', label: '跌幅' }
+        { key: 'down', label: '跌幅' },
+        { key: 'pos', label: '位置 贵→便宜' }
       ],
-      sortMode: 'default',
       items: MOCK_ITEMS,
       dataSource: 'mock',
       activeSource: '',
       loading: true,
-      scrolled: false,
       favorites: [],
-      drawerVisible: false,
-      activeItems: [],
+      detailVisible: false,
+      detailItems: [],
       compareList: [],
       pressTimer: null,
       toastTimer: null,
@@ -498,77 +684,170 @@ const vm = createApp({
     };
   },
   computed: {
+    categories() {
+      const order = ['蔬菜', '水果', '肉禽蛋', '水产', '米面粮油', '豆制品'];
+      const seen = [...new Set(this.items.map(i => i.category).filter(Boolean))];
+      const known = order.filter(c => seen.includes(c));
+      const extra = seen.filter(c => !order.includes(c)).sort();
+      return ['全部', ...known, ...extra];
+    },
+    letters() {
+      const q = this.searchQuery.toLowerCase();
+      const m = {};
+      this.items.forEach(it => {
+        if (this.mode === 'supermarket' && it.supermarketPrice == null) return;
+        if (this.activeSource && this.sourceLabel(it) !== this.activeSource) return;
+        if (this.activeCategory !== '全部' && it.category !== this.activeCategory) return;
+        if (q && !(it.name.includes(q) || (it.pinyin || '').toLowerCase().includes(q))) return;
+        const l = ((it.pinyin || it.name || '?')[0] || '?').toUpperCase();
+        m[l] = (m[l] || 0) + 1;
+      });
+      return Object.keys(m).sort().map(l => ({ letter: l, count: m[l] }));
+    },
     filteredItems() {
       const q = this.searchQuery.toLowerCase();
-      let list = this.items.filter(it => {
+      const list = this.items.filter(it => {
         const okCat = this.activeCategory === '全部' || it.category === this.activeCategory;
+        const okLetter = !this.activeLetter ||
+          ((it.pinyin || it.name || '?')[0] || '?').toUpperCase() === this.activeLetter;
         const okSearch = !q || it.name.includes(q) || (it.pinyin || '').toLowerCase().includes(q);
-        // 商超模式：批发源品种没有对应商超报价，直接不展示
         const okMode = this.mode === 'market' || it.supermarketPrice != null;
         const okSrc = !this.activeSource || this.sourceLabel(it) === this.activeSource;
-        return okCat && okSearch && okMode && okSrc;
+        return okCat && okLetter && okSearch && okMode && okSrc;
       });
+      const pinFav = this.sortMode === 'default';
       return list.slice().sort((a, b) => {
-        const fa = this.isFav(a) ? 0 : 1, fb = this.isFav(b) ? 0 : 1;
-        if (fa !== fb) return fa - fb;                    // 收藏置顶
+        if (pinFav) {
+          const fa = this.isFav(a) ? 0 : 1, fb = this.isFav(b) ? 0 : 1;
+          if (fa !== fb) return fa - fb;
+        }
         if (this.sortMode === 'up') return this.change(b) - this.change(a);
         if (this.sortMode === 'down') return this.change(a) - this.change(b);
+        if (this.sortMode === 'pos') {
+          // 0=实测且非平稳（可排名） 1=实测但价格平稳 2=周次不足 3=推算
+          const bucket = x => {
+            const t = this.tierName(x);
+            if (t === 'real') return this.isStable(x) ? 1 : 0;
+            return t === 'partial' ? 2 : 3;
+          };
+          const ba = bucket(a), bb = bucket(b);
+          if (ba !== bb) return ba - bb;
+          if (ba !== 0) return 0;
+          return this.pct1y(b) - this.pct1y(a);   // 贵 → 便宜
+        }
         return 0;
       });
     },
     stats() {
       let up = 0, down = 0, flat = 0;
       this.items.forEach(it => {
-        if (this.isReopen(it)) return;          // 季节性重新上市不参与涨跌统计
+        if (this.tierName(it) !== 'real') return;   // 只统计实测品种
+        if (this.isReopen(it)) return;              // 季节性上市不计
         const c = this.change(it);
         if (c > 0.005) up++; else if (c < -0.005) down++; else flat++;
       });
       return { up, down, flat };
     },
     rankList() {
-      return this.items.filter(it => !this.isReopen(it)).sort((a, b) =>
-        this.rankTab === 'up'
+      return this.items
+        .filter(it => this.tierName(it) === 'real' && !this.isReopen(it))
+        .sort((a, b) => this.rankTab === 'up'
           ? this.change(b) - this.change(a)
-          : this.change(a) - this.change(b)
-      ).slice(0, 10);
+          : this.change(a) - this.change(b))
+        .slice(0, 10);
+    },
+    realCount() {
+      return this.items.filter(it => this.tierName(it) === 'real').length;
+    },
+    tierCounts() {
+      const m = { real: 0, partial: 0, ref: 0, mock: 0 };
+      this.items.forEach(it => { m[this.tierName(it)] += 1; });
+      return m;
     },
     compareNames() {
       return this.compareList.map(i => i.name).join(' · ');
     },
-    /* 各官方数据源的品种数（用于顶部来源筛选条） */
     sourceStats() {
       const m = {};
       this.items.forEach(it => {
         if (this.mode === 'supermarket' && it.supermarketPrice == null) return;
-        const s = it.source || '';
-        const k = s.includes('发改委') ? '发改委·每日'
-                : s.includes('农业农村') ? '农业局·批发'
-                : s.includes('商务局') ? '商务局·周报'
-                : (s || '演示');
+        const k = this.sourceLabel(it);
         m[k] = (m[k] || 0) + 1;
       });
       return Object.keys(m).map(k => ({ label: k, count: m[k] }))
         .sort((a, b) => b.count - a.count);
     },
-    /* 当前 Tab 下的总品种数（来源条上的「全部来源」） */
     modeTotal() {
       return this.items.filter(it => this.mode === 'market' || it.supermarketPrice != null).length;
+    },
+    chartBadge() {
+      if (this.detailItems.length !== 1) return '';
+      const it = this.detailItems[0];
+      const t = this.tierName(it);
+      if (t === 'partial') return `实测 ${it.obsWeeks || 0} 周 · 其余无数据`;
+      if (t === 'ref' || t === 'mock') return '推算走势 · 非实测';
+      return '';
+    },
+    chartCaption() {
+      const list = this.detailItems;
+      if (list.length > 1) {
+        return list.every(i => this.tierName(i) === 'real')
+          ? '两条曲线均为官方逐周实测价，横轴为真实周日期。'
+          : '实线为实测价，琥珀色虚线为推算走势，两者口径不同，不宜直接比大小。';
+      }
+      const t = this.tierName(list[0]);
+      if (t === 'partial') return `官方仅提供 ${list[0].obsWeeks || 0} 周实测，其余周次无数据：图中断档不连线，也不标极值。`;
+      if (t === 'ref' || t === 'mock') return '虚线为按同分类真实价格指数推算的走势，仅看趋势，不能当作逐周实测价。';
+      return '红点 = 区间最高价，绿点 = 区间最低价。双指可缩放，拖动查看具体数值。';
+    },
+    singleIsReal() {
+      return this.detailItems.length === 1 && this.detailItems[0]
+        && this.tierName(this.detailItems[0]) === 'real';
+    },
+    detailDataNote() {
+      const it = this.detailItems[0];
+      if (!it) return '';
+      if (this.tierName(it) === 'partial') {
+        return `官方仅提供 ${it.obsWeeks || 0} 周逐周报价，其余周次无实测值。为避免用补位值算出假位置，这里不给百分位，也不在图上标极值。`;
+      }
+      return '该品种只公示当日价，没有 52 周逐周报价。走势按同分类的真实价格指数等比推算，仅可看趋势，不能当作逐周实测价。';
+    },
+    gapCount() {
+      if (!this.detailItems.length) return 0;
+      return this.chartData(this.detailItems[0]).filter(v => v === null).length;
+    },
+    compareGap() {
+      if (this.detailItems.length !== 2) return null;
+      return this.priceOf(this.detailItems[0]) - this.priceOf(this.detailItems[1]);
     }
+  },
+  watch: {
+    activeCategory() { /* 切分类时保留首字母筛选，符合“在分类内定位” */ }
   },
   mounted() {
     try { this.favorites = JSON.parse(localStorage.getItem(FAV_KEY)) || []; }
     catch (e) { this.favorites = []; }
 
-    window.addEventListener('scroll', this.onScroll, { passive: true });
+    this._onResize = () => {
+      if (chartInstance) chartInstance.resize();
+    };
+    window.addEventListener('resize', this._onResize);
+
+    // Esc 关闭弹窗（桌面）
+    this._onKey = e => {
+      if (e.key !== 'Escape') return;
+      if (this.detailVisible) this.closeDetail();
+      else if (this.rankVisible) this.rankVisible = false;
+    };
+    window.addEventListener('keydown', this._onKey);
 
     const started = Date.now();
-    const MIN_SKELETON = 550;     // 骨架屏最短展示时长，避免一闪而过
+    const MIN_SKELETON = 450;
     const done = () => {
       const wait = Math.max(0, MIN_SKELETON - (Date.now() - started));
       setTimeout(() => { this.loading = false; }, wait);
     };
 
-    // 优先读取爬虫生成的 data.json；file:// 双击打开会被浏览器拦截 → 静默回退到 MOCK_ITEMS
     fetch('data.json')
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(data => {
@@ -581,28 +860,109 @@ const vm = createApp({
       .catch(() => done());
   },
   methods: {
-    onScroll() { this.scrolled = window.scrollY > 48; },
+    /* ---------- 价格 ---------- */
+    priceOf(it) {
+      const v = this.mode === 'market' ? it.currentPrice : it.supermarketPrice;
+      return Number(v) || 0;
+    },
+    priceDiff(it) {
+      return (Number(it.supermarketPrice) || 0) - (Number(it.currentPrice) || 0);
+    },
+    hasSuper(it) { return it && it.supermarketPrice != null && it.storeName; },
+    isCheapestStore(it) { return !!(it && it.storeName && it.storeName.includes('中百')); },
 
-    /* ---------- 价格 / 涨跌 ---------- */
-    displayPrice(it) { return this.mode === 'market' ? it.currentPrice : it.supermarketPrice; },
-    priceDiff(it) { return it.supermarketPrice - it.currentPrice; },
+    /* ---------- 数据可信度分级：real / partial / ref / mock ---------- */
+    tierName(it) {
+      if (!it) return 'ref';
+      if (it.historyKind === 'random') return 'mock';         // 管道若标了随机生成，直接降级
+      if (it.historyReal !== true) return 'ref';              // 推算
+      const n = (it.history || []).length;
+      if (it.obsWeeks != null && it.obsWeeks < n) return 'partial';  // 实测周数不足，存在补位
+      return 'real';
+    },
+    tierText(it) {
+      const t = this.tierName(it);
+      if (t === 'partial') return `实测${it.obsWeeks}周`;
+      if (t === 'mock') return '模拟';
+      if (t === 'ref') return '推算';
+      return '实测';
+    },
+    tierClass(it) {
+      const t = this.tierName(it);
+      return t === 'real' ? 'card-real' : t === 'ref' ? 'card-ref' : t === 'partial' ? 'card-partial' : 'card-mock';
+    },
+    noPosReason(it) {
+      const t = this.tierName(it);
+      if (t === 'partial') return `仅 ${it.obsWeeks || 0} 周实测，不作位置判断`;
+      if (t === 'mock') return '模拟数据，不作位置判断';
+      return '无逐周实测价，按分类指数推算';
+    },
+
+    /* ---------- 涨跌 ---------- */
     change(it) {
-      const h = it.history || [];
+      const h = (it.history || []).filter(v => !isGap(v));
       if (h.length < 2) return 0;
       const prev = h[h.length - 2], cur = h[h.length - 1];
       return prev ? (cur - prev) / prev * 100 : 0;
     },
-    delta(it) {
-      const h = it.history || [];
-      if (h.length < 2) return 0;
-      return h[h.length - 1] - h[h.length - 2];
+    deltaText(it) {
+      if (this.isReopen(it)) return '季节性上市';
+      if (this.tierName(it) === 'partial') return '—';
+      if (this.tierName(it) === 'mock') return '—';
+      const c = this.change(it);
+      if (Math.abs(c) < 0.005) return '持平';
+      return (c > 0 ? '+' : '−') + Math.abs(c).toFixed(2) + '%';
     },
-    sparkLine(it) { return sparkPoints(it.history, false); },
-    sparkArea(it) { return sparkPoints(it.history, true); },
+    deltaCaption(it) {
+      if (this.isReopen(it)) return '停报后重新上市，不计周环比';
+      const t = this.tierName(it);
+      if (t === 'partial') return `仅 ${it.obsWeeks || 0} 周实测，无实测前值`;
+      if (t === 'mock') return '模拟数据，无实测前值';
+      if (t === 'ref') return this.mode === 'supermarket' ? '推算周环比（市场价）' : '推算周环比';
+      return this.mode === 'supermarket' ? '市场价周环比' : '周环比';
+    },
+    deltaClass(it) {
+      if (this.isReopen(it)) return 'd-flat';
+      const t = this.tierName(it);
+      if (t === 'partial' || t === 'mock') return 'd-unknown';
+      if (t === 'ref') return 'd-ref';
+      const c = this.change(it);
+      if (c > 0.005) return 'd-up';
+      if (c < -0.005) return 'd-down';
+      return 'd-flat';
+    },
 
-    /* 区间百分位（当前价在近 N 周内的相对位置，越高越贵） */
+    /* ---------- 迷你走势 ---------- */
+    /* 季节性停报：prevObsAge 表示上次观测在 N 周前，中间 N-1 周视为无观测，
+       一律留空，不拿补位值连成一条假线 */
+    prevGapWeeks(it) {
+      return this.isReopen(it) ? Math.max(0, (it.prevObsAge || 0) - 1) : 0;
+    },
+    seriesOf(it) {
+      const h = (it.history || []).map(v => (isGap(v) ? null : Number(v)));
+      const g = this.prevGapWeeks(it);
+      if (g > 0 && h.length > g) {
+        for (let i = h.length - 1 - g; i < h.length - 1; i++) h[i] = null;
+      }
+      return h;
+    },
+    sparkSegs(it) { return sparkSegments(this.seriesOf(it)); },
+    sparkColor(it) {
+      if (this.tierName(it) !== 'real') return '#f0b429';
+      const c = this.change(it);
+      return c > 0.005 ? '#f87171' : c < -0.005 ? '#34d399' : '#64748b';
+    },
+    sparkArea(it) {
+      const segs = sparkSegments(this.seriesOf(it));
+      if (segs.length !== 1) return '';       // 有断档就不画面积，避免视觉上补线
+      const pts = segs[0].split(' ').map(s => s.split(','));
+      const firstX = pts[0][0], lastX = pts[pts.length - 1][0];
+      return [[firstX, 34], ...pts, [lastX, 34]].map(p => p.join(',')).join(' ');
+    },
+
+    /* ---------- 位置百分位（只给实测） ---------- */
     percentile(it, weeks) {
-      const h = (it.history || []).slice(-weeks);
+      const h = (it.history || []).filter(v => !isGap(v)).slice(-weeks);
       if (!h.length) return 0;
       const cur = h[h.length - 1];
       const below = h.filter(v => v <= cur).length;
@@ -611,68 +971,67 @@ const vm = createApp({
     pct3(it) { return this.percentile(it, 13); },
     pct1y(it) { return this.percentile(it, 52); },
     rangeText(it, weeks) {
-      const h = (it.history || []).slice(-weeks);
+      const h = (it.history || []).filter(v => !isGap(v)).slice(-weeks);
       if (!h.length) return '';
       return `当前 ${h[h.length - 1].toFixed(2)} · 区间 ${Math.min(...h).toFixed(2)}~${Math.max(...h).toFixed(2)}`;
     },
-    posColor(p) { return p >= 70 ? 'text-red-500' : p <= 30 ? 'text-green-600' : 'text-amber-500'; },
-    posBar(p) { return p >= 70 ? 'bg-red-400' : p <= 30 ? 'bg-green-400' : 'bg-amber-400'; },
+    posTextClass(p) { return p >= 70 ? 'p-high' : p <= 30 ? 'p-low' : 'p-mid'; },
+    posBarClass(p) { return p >= 70 ? 'bar-high' : p <= 30 ? 'bar-low' : 'bar-mid'; },
 
-    /* ---------- 数据来源标注 ---------- */
-    sourceLabel(it) {
+    /* ---------- 数据来源 ---------- */
+    sourceKey(it) {
       const s = it.source || '';
-      if (s.includes('发改委')) return '发改委·每日';
-      if (s.includes('农业农村')) return '农业局·批发';
-      if (s.includes('商务局')) return '商务局·周报';
-      return s || '演示';
+      if (s.includes('发改委')) return 'fgj';
+      if (s.includes('农业农村')) return 'agri';
+      if (s.includes('商务局')) return 'com';
+      if (s.includes('省')) return 'prov';
+      if (s.includes('全国')) return 'nat';
+      return 'mock';
+    },
+    sourceLabel(it) {
+      const map = { fgj: '发改委·每日', agri: '农业局·批发', com: '商务局·周报', prov: '省级·参考', nat: '全国·参考', mock: '演示' };
+      return map[this.sourceKey(it)];
     },
     sourceClass(it) {
-      const s = it.source || '';
-      if (s.includes('发改委')) return 'text-emerald-600 border-emerald-200 bg-emerald-50/70';
-      if (s.includes('农业农村')) return 'text-sky-600 border-sky-200 bg-sky-50/70';
-      if (s.includes('商务局')) return 'text-violet-600 border-violet-200 bg-violet-50/70';
-      return 'text-amber-600 border-amber-200 bg-amber-50/70';
+      return 'src-' + this.sourceKey(it);
     },
-    /* 52 周波动极小（<1.5%）视为价格平稳，百分位没有参考意义 */
+
+    /* 52 周波动 <1.5% 视为平稳，百分位无参考意义 */
     isStable(it) {
-      const h = it.history || [];
+      const h = (it.history || []).filter(v => !isGap(v));
       if (h.length < 8) return false;
       const avg = h.reduce((s, v) => s + v, 0) / h.length;
       if (!avg) return false;
       return (Math.max(...h) - Math.min(...h)) / avg < 0.015;
     },
 
-    /* 季节性品种整月停报后重新上市（如藜蒿夏天无货），不能按周环比算暴涨 */
-    isReopen(it) {
-      return !!(it.prevObsAge && it.prevObsAge > 4);
-    },
+    /* 季节性品种整月停报后重新上市，不计周环比 */
+    isReopen(it) { return !!(it.prevObsAge && it.prevObsAge > 4); },
 
-    /* ---------- 收藏（按名称存，数据每天刷新 id 会变） ---------- */
-    isFav(it) { return this.favorites.includes(it.name); },
+    /* ---------- 收藏（按名称存，id 每天会变） ---------- */
+    isFav(it) { return !!it && this.favorites.includes(it.name); },
     toggleFav(it) {
+      if (!it) return;
       const i = this.favorites.indexOf(it.name);
-      if (i > -1) this.favorites.splice(i, 1); else this.favorites.push(it.name);
+      if (i > -1) { this.favorites.splice(i, 1); this.showToast('已取消收藏'); }
+      else { this.favorites.push(it.name); this.showToast('已收藏'); }
       localStorage.setItem(FAV_KEY, JSON.stringify(this.favorites));
     },
 
-    /* ---------- 长按加入对比 ---------- */
+    /* ---------- 长按对比 ---------- */
     pressStart(it) {
       this.longPressed = false;
       clearTimeout(this.pressTimer);
       this.pressTimer = setTimeout(() => {
         this.longPressed = true;
         this.toggleCompare(it);
-      }, 550);
+      }, 520);
     },
     pressEnd() { clearTimeout(this.pressTimer); },
-    isComparing(it) { return this.compareList.some(x => x.id === it.id); },
+    isComparing(it) { return this.compareList.some(x => x.name === it.name); },
     toggleCompare(it) {
-      const i = this.compareList.findIndex(x => x.id === it.id);
-      if (i > -1) {
-        this.compareList.splice(i, 1);
-        this.showToast('已移出对比');
-        return;
-      }
+      const i = this.compareList.findIndex(x => x.name === it.name);
+      if (i > -1) { this.compareList.splice(i, 1); this.showToast('已移出对比'); return; }
       if (this.compareList.length >= 2) { this.showToast('最多对比 2 个品种'); return; }
       this.compareList.push(it);
       if (this.compareList.length === 2) {
@@ -686,102 +1045,154 @@ const vm = createApp({
     clearCompare() { this.compareList = []; },
 
     onCardClick(it) {
-      if (this.longPressed) { this.longPressed = false; return; }   // 长按后不触发点击
+      if (this.longPressed) { this.longPressed = false; return; }
       this.openDetail([it]);
     },
-
-    /* ---------- 详情抽屉 + ECharts ---------- */
-    openDetail(list) {
-      this.activeItems = list;
-      this.drawerVisible = true;
-      this.$nextTick(() => setTimeout(() => this.renderChart(), 90));
+    resetFilters() {
+      this.searchQuery = '';
+      this.activeCategory = '全部';
+      this.activeLetter = '';
+      this.activeSource = '';
+      this.sortMode = 'default';
     },
-    closeDrawer() {
-      this.drawerVisible = false;
+
+    /* ---------- 详情弹窗 ---------- */
+    openDetail(list) {
+      this.detailItems = list.filter(Boolean);
+      this.detailVisible = true;
+      if (window.innerWidth < 768) document.body.style.overflow = 'hidden';   // 手机端锁背景滚动
+      this.$nextTick(() => setTimeout(() => this.renderChart(), 60));
+    },
+    closeDetail() {
+      this.detailVisible = false;
+      document.body.style.overflow = '';
       if (chartInstance) { chartInstance.dispose(); chartInstance = null; }
     },
+
+    /* 横轴：必要时用 updated 反推真实日期；有补位则退回周序，不编日期 */
+    axisInfo(it) {
+      const n = (it.history || []).length;
+      const ds = it.historyDates || it.dates;
+      if (Array.isArray(ds) && ds.length === n) {
+        return { labels: ds.map(d => String(d).slice(5)), dated: true };
+      }
+      const complete = it.obsWeeks == null || it.obsWeeks >= n;
+      const end = parseYmd(it.updated);
+      if (complete && end) {
+        return { labels: Array.from({ length: n }, (_, i) => mmdd(shiftDays(end, -(n - 1 - i) * 7))), dated: true };
+      }
+      return { labels: Array.from({ length: n }, (_, i) => 'W' + (i + 1)), dated: false };
+    },
+
+    chartData(it) {
+      return this.seriesOf(it);
+    },
+
     renderChart() {
       const el = this.$refs.chartEl;
-      if (!el || !this.activeItems.length) return;
-      if (chartInstance) chartInstance.dispose();
-      chartInstance = echarts.init(el);
+      if (!el || !this.detailItems.length) return;
+      if (chartInstance) { chartInstance.dispose(); chartInstance = null; }
+      const inst = echarts.init(el, null, { renderer: 'canvas' });
+      chartInstance = inst;
 
-      const palette = ['#16a34a', '#2563eb'];
-      const series = this.activeItems.map((it, i) => {
+      const list = this.detailItems;
+      const single = list.length === 1;
+      const palette = ['#34d399', '#60a5fa'];
+      const axis = this.axisInfo(list[0]);
+      const labels = axis.labels;
+
+      const series = list.map((it, i) => {
+        const real = this.tierName(it) === 'real';
         const color = palette[i % palette.length];
-        return {
+        const data = this.chartData(it);
+        // 序列里有空档时把数据点显示出来，否则孤立点（前后都缺数据）会看不见
+        const hasGap = data.some(v => v === null);
+        const s = {
           name: it.name,
           type: 'line',
-          data: it.history || [],
-          smooth: true,
-          symbol: 'none',
-          lineStyle: { width: 2.2, color },
+          data: data,
+          smooth: 0.22,
+          showSymbol: hasGap,
+          symbol: 'circle',
+          symbolSize: hasGap ? 3.5 : 6,
+          connectNulls: false,
+          lineStyle: { width: 2.2, color, type: real ? 'solid' : [5, 4] },
           itemStyle: { color },
-          emphasis: { focus: 'series' },
-          areaStyle: i === 0 ? {
-            color: {
-              type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(22,163,74,0.20)' },
-                { offset: 1, color: 'rgba(22,163,74,0.01)' }
-              ]
-            }
-          } : undefined,
-          markPoint: this.activeItems.length === 1 ? {
-            symbolSize: 9,
-            label: { show: false },
-            data: [
-              { type: 'max', itemStyle: { color: '#ef4444' } },
-              { type: 'min', itemStyle: { color: '#22c55e' } }
-            ]
-          } : undefined
+          emphasis: { focus: 'series' }
         };
+        if (single && real) {
+          s.areaStyle = {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(52,211,153,0.22)' },
+              { offset: 1, color: 'rgba(52,211,153,0)' }
+            ])
+          };
+          s.markPoint = {
+            symbolSize: 8,
+            label: { show: true, fontSize: 10, fontWeight: 600 },
+            itemStyle: { borderColor: '#0d1526', borderWidth: 2 },
+            data: [
+              { type: 'max', itemStyle: { color: '#f87171' }, label: { color: '#f87171', position: 'top', formatter: p => '¥' + Number(p.value).toFixed(2) } },
+              { type: 'min', itemStyle: { color: '#34d399' }, label: { color: '#34d399', position: 'bottom', formatter: p => '¥' + Number(p.value).toFixed(2) } }
+            ]
+          };
+        }
+        return s;
       });
 
-      chartInstance.setOption({
-        grid: { left: 38, right: 14, top: 26, bottom: 34 },
+      inst.setOption({
+        backgroundColor: 'transparent',
+        animationDuration: 420,
+        grid: { left: 44, right: 16, top: 26, bottom: 30 },
         tooltip: {
           trigger: 'axis',
-          triggerOn: 'mousemove|click',
           confine: true,
-          axisPointer: { type: 'line', snap: true, lineStyle: { color: '#94a3b8', type: 'dashed' } },
-          textStyle: { fontSize: 11 },
+          backgroundColor: 'rgba(13,21,38,.96)',
+          borderColor: '#2c3d60',
+          borderWidth: 1,
+          padding: [6, 9],
+          textStyle: { color: '#e8eefb', fontSize: 11 },
+          axisPointer: { type: 'line', snap: true, lineStyle: { color: '#475569', type: [3, 3] } },
           formatter: ps => {
+            if (!ps || !ps.length) return '';
             const idx = ps[0].dataIndex;
-            let s = '<div style="font-size:11px;color:#94a3b8;margin-bottom:2px">第 ' + (idx + 1) + ' 周</div>';
+            let html = '<div style="font-size:10px;color:#7b8ca6;margin-bottom:3px">'
+              + (axis.dated ? labels[idx] : `第 ${idx + 1} 周`) + '</div>';
             ps.forEach(p => {
-              s += '<div style="margin-top:2px">' + p.marker + p.seriesName +
-                   ' <b style="margin-left:6px">¥' + Number(p.value).toFixed(2) + '</b></div>';
+              if (p.value === null || p.value === undefined) {
+                html += `<div style="margin-top:2px;color:#55688a">${p.marker}${p.seriesName} 无数据</div>`;
+              } else {
+                html += `<div style="margin-top:2px">${p.marker}${p.seriesName}
+                  <b style="margin-left:8px">¥${Number(p.value).toFixed(2)}</b></div>`;
+              }
             });
-            return s;
+            return html;
           }
         },
-        legend: this.activeItems.length > 1
-          ? { top: 0, right: 0, itemWidth: 12, itemHeight: 8, textStyle: { fontSize: 10, color: '#6b7280' } }
+        legend: list.length > 1
+          ? { top: 0, right: 0, itemWidth: 12, itemHeight: 8, textStyle: { fontSize: 10, color: '#93a4bf' } }
           : { show: false },
         xAxis: {
           type: 'category',
-          data: (this.activeItems[0].history || []).map((_, i) => 'W' + (i + 1)),
+          data: labels,
           boundaryGap: false,
-          axisLabel: { interval: 12, fontSize: 9, color: '#9ca3af' },
-          axisLine: { lineStyle: { color: '#e5e7eb' } },
+          axisLabel: { interval: Math.max(0, Math.floor(labels.length / 6) - 1), fontSize: 9, color: '#55688a' },
+          axisLine: { lineStyle: { color: '#1e2b47' } },
           axisTick: { show: false }
         },
         yAxis: {
           type: 'value',
           scale: true,
-          axisLabel: { fontSize: 9, color: '#9ca3af' },
-          splitLine: { lineStyle: { color: '#f3f4f6' } }
+          axisLabel: { fontSize: 9, color: '#55688a', formatter: v => v.toFixed(1) },
+          splitLine: { lineStyle: { color: '#16233c' } }
         },
-        // 手势：双指缩放 / 单指拖动平移
         dataZoom: [{ type: 'inside', zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 50 }],
-        series: series
+        series
       });
-      chartInstance.resize();
+      inst.resize();
     },
 
     /* ---------- 其它 ---------- */
-    openRank() { this.rankVisible = true; },
     showToast(msg) {
       this.toast = msg;
       clearTimeout(this.toastTimer);
@@ -790,7 +1201,7 @@ const vm = createApp({
   }
 }).mount('#app');
 
-// 暴露实例，便于调试与自动化验收（对正常使用无影响）
+// 调试与自动化验收用（不影响正常使用）
 window.__cailanzi = vm;
 </script>
 </body>

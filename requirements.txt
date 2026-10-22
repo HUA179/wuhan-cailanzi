@@ -1,0 +1,8 @@
+# 武汉菜篮子 - 爬虫依赖清单
+# 安装：pip install -r requirements.txt
+#
+# 说明：仅这三个第三方包，其余全部为 Python 标准库
+# （json / random / re / sys / os / time / datetime / concurrent.futures / urllib）
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pypinyin>=0.51.0

@@ -1,2 +1,5 @@
 cloud.log.zip
 tools/tailwind/node_modules/
+.workbuddy/
+99-归档-*/
+.venv/

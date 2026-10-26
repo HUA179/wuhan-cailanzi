@@ -64,6 +64,7 @@ NYNCJ_SOURCES = []
 SW_SOURCE = None
 FGJ_CATEGORY = {}
 NAME_ALIAS = {}
+SUPER_EXTRA = {}
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -75,6 +76,13 @@ MAX_WORKERS = 6                # 历史日期并发数（串行 52 周在异地�
 WEEKS = 52                     # 走势图窗口
 DATA_FILE = "data.json"
 
+# 数据源陈旧阈值（天）。超过就 WARNING，并且**不计入当日有效更新数**。
+# 为什么要有这道闸：2026-09-14 起商务局周报正文改成图片，解析器拿不到表格一路回溯到
+# 9-11，日志却照样打印「周报更新 7 种」——静默失败比直接报错危险得多。
+STALE_DAYS = 3
+# 商超比价快照是周更（实测 pointDataDate=2026-10-21），阈值单独放宽
+SUPER_SNAPSHOT_STALE_DAYS = 10
+
 
 def configure(city_id=None):
     """
@@ -85,6 +93,7 @@ def configure(city_id=None):
     """
     global CITY, FGJ_API, FGJ_REFERER, LOCAL_SOURCE_NAME, AREA_CODE
     global NYNCJ_BASE, SW_BASE, NYNCJ_SOURCES, SW_SOURCE, FGJ_CATEGORY, NAME_ALIAS
+    global SUPER_EXTRA
 
     CITY = load_city(city_id)
     fgj = CITY.get("fgj") or {}
@@ -98,6 +107,7 @@ def configure(city_id=None):
     SW_SOURCE = CITY.get("sw_source")
     FGJ_CATEGORY = CITY.get("category_map") or {}
     NAME_ALIAS = CITY.get("name_alias") or {}
+    SUPER_EXTRA = CITY.get("super_extra") or {}
     return CITY
 
 
@@ -253,6 +263,52 @@ def weekly_dates(latest, weeks=WEEKS):
     return ds
 
 
+# ---------------------------------------------------------------- 商超快照（补发改委均价表没有的品种）
+
+def fgj_point_snapshot(point_id, date_str=None):
+    """
+    单个监测点的逐品价格 + **平台真实快照日**。
+
+    实测（2026-10-26，同一监测点分别传 date=2026-10-26 / 2026-01-05 / 2025-06-10）：
+    三次返回完全一致，响应里的 pointDataDate 恒为 2026-10-21。
+    ⇒ queryDataForPoint 的 date 参数不生效，只能取「当前快照」。
+
+    所以这里必须把 pointDataDate 原样带出来当 updated，
+    绝不能用传进去的日期或今天顶替——那是伪造更新时间。
+    """
+    data = fgj_get("/dataStatistics/priceCompare/queryDataForPoint",
+                   {"pointId": point_id,
+                    "date": date_str or datetime.now().strftime("%Y-%m-%d")})
+    if not data:
+        return {}, None
+    snap = (data.get("pointDataDate") or "")[:10] or None
+    out = {}
+    for r in data.get("pointData") or []:
+        try:
+            out[r["name"]] = float(r["price"])
+        except (TypeError, ValueError):
+            continue
+    return out, snap
+
+
+def fgj_supermarket_extras(store_prices):
+    """
+    商超监测点里有、但发改委「每日均价表」没有的品种，补成独立条目。
+
+    目前只有「猪五花肉」：商务局周报图片化之后，五花肉在武汉找不到第二个
+    公开官方源，而 7 家商超监测点的比价清单里一直有它。
+    口径仍是零售价（元/500g，与主表一致），差别只是数据节奏为周更快照。
+    """
+    out = []
+    for name, cat in (SUPER_EXTRA.get("items") or {}).items():
+        price, store = pick_cheapest_supermarket(store_prices, name)
+        if price is None:
+            print(f"  [warn] 商超快照里没有「{name}」报价，跳过")
+            continue
+        out.append({"name": name, "price": price, "category": cat, "store": store})
+    return out
+
+
 # ---------------------------------------------------------------- 农业农村局（补充品种）
 
 def get_soup(url):
@@ -342,10 +398,21 @@ def merge_markets(articles):
 
 
 # ---------------------------------------------------------------- 商务局周报（补充肉禽蛋）
+#
+# 2026-09-14 起，武汉市商务局把「生活必需品市场监测情况」的正文从 HTML 表格换成了
+# 6 张 JPG（实测：table 数 0 / 正文图 6 张，且页面无任何 xls/xlsx/doc/pdf 附件）。
+# 也就是说这条路**已经没有可解析的数据**，不是偶发失败。
+#
+# 处理原则：
+#   1. 解析器保留（万一哪天改回表格，自动复活），但必须能明确说出「为什么没数据」；
+#   2. 拿到的数据先过 stale_check，陈旧就不计入当日有效更新数；
+#   3. 绝不再出现「解析失败 → 一路回溯 → 日志照报更新 N 种」这种静默失败。
 
-def parse_sw_weekly(article_url):
-    soup = get_soup(article_url)
-    table = soup.find("table")
+SW_IMG_RE = re.compile(r"(logo|beian|jiucuo|icon|sublogo|hxsw|whsw|red)", re.I)
+
+
+def parse_sw_table(table):
+    """商务局周报表格 → {"肉禽蛋": [...], "水产": [...]}（纯解析，不做网络 IO）。"""
     if not table:
         return {}
     GROUP_KEYS = ("粮食", "食用油", "肉类", "禽类", "蛋类",
@@ -388,6 +455,79 @@ def parse_sw_weekly(article_url):
         seen[cat].add(name)
         result[cat].append({"name": name, "price": round(price, 2)})
     return result
+
+
+def parse_sw_weekly(article_url):
+    """兼容旧调用：抓页面 → 取第一张表 → 解析（拿不到表格返回 {}）。"""
+    return parse_sw_table(get_soup(article_url).find("table"))
+
+
+def sw_articles(take=6):
+    """商务局周报栏目 → [(文章URL, 标题)]。标题里带日期区间，比 URL 发布日更准。"""
+    if not SW_SOURCE:
+        return []
+    list_url = urljoin(SW_BASE, SW_SOURCE["column"])
+    soup = get_soup(list_url)
+    out = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if re.search(r"\d{6}/t\d+_\d+\.s?html?", href):
+            out.append((urljoin(list_url, href), a.get_text(strip=True)))
+        if len(out) >= take:
+            break
+    return out
+
+
+def sw_fetch(max_try=3):
+    """
+    取商务局「最新一期仍能解析」的周报，并给出可读结论。
+
+    返回 {"ok", "date", "rows", "reason", "url", "title"}
+        ok=False 时 reason 说明到底为什么（图片化 / 无表格 / 栏目打不开），
+        调用方直接打 WARNING，不再自己猜。
+
+    为什么不再「for 循环回溯 6 篇、break 到第一篇有数据的」：
+    图片化之后每一篇都解析不出东西，回溯只会一路退到 9-11 的老表格，
+    然后用两个月前的价格冒充今天的数据。现在最多看 max_try 篇，
+    并在每一篇上都留下失败原因。
+    """
+    if not SW_SOURCE:
+        return {"ok": False, "date": None, "rows": {}, "reason": "未配置商务局栏目",
+                "url": "", "title": ""}
+    try:
+        arts = sw_articles(max(max_try, 1))
+    except Exception as e:
+        return {"ok": False, "date": None, "rows": {},
+                "reason": f"栏目页抓取失败: {type(e).__name__}", "url": "", "title": ""}
+
+    reasons = []
+    for url, title in arts[:max_try]:
+        tag = parse_cn_date(title) or article_date(url) or "日期未知"
+        try:
+            soup = get_soup(url)
+        except Exception as e:
+            reasons.append(f"{tag} 打开失败: {type(e).__name__}")
+            continue
+
+        table = soup.find("table")
+        if not table:
+            imgs = [i for i in soup.find_all("img")
+                    if not SW_IMG_RE.search(i.get("src", ""))
+                    and not re.search(r"/\d{2}\.jpg$", i.get("src", ""))]
+            reasons.append(f"{tag} 正文已图片化（0 表格 / {len(imgs)} 图）" if imgs
+                           else f"{tag} 正文没有表格")
+            continue
+
+        rows = parse_sw_table(table)
+        if not rows.get("肉禽蛋") and not rows.get("水产"):
+            reasons.append(f"{tag} 表格里没有肉禽蛋/水产行")
+            continue
+
+        return {"ok": True, "date": tag, "rows": rows, "reason": "",
+                "url": url, "title": title}
+
+    return {"ok": False, "date": None, "rows": {},
+            "reason": "；".join(reasons) or "栏目里没有可用文章", "url": "", "title": ""}
 
 
 # ---------------------------------------------------------------- 数据加工
@@ -453,6 +593,53 @@ def article_date(url):
     if len(raw) == 8 and raw.isdigit():
         return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
     return None
+
+
+def parse_cn_date(text):
+    """
+    从中文标题里抽最后一个日期，返回 ISO 日期。
+    标题形如「武汉市生活必需品市场监测情况（2026年9月28日—2026年10月4日）」，
+    取区间右端（= 该期数据覆盖的最后一天），比 URL 的发布日更接近数据口径。
+    """
+    pts = re.findall(r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日", text or "")
+    best = None
+    for y, m, d in pts:
+        try:
+            cur = datetime(int(y), int(m), int(d))
+        except ValueError:
+            continue
+        if best is None or cur > best:
+            best = cur
+    return best.strftime("%Y-%m-%d") if best else None
+
+
+def days_old(date_str):
+    """数据日期距今天几天；解析失败返回 None。"""
+    try:
+        d = datetime.strptime(str(date_str)[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    return (datetime.now().date() - d).days
+
+
+def stale_check(label, date_str, days=STALE_DAYS):
+    """
+    数据源陈旧闸门。返回 (fresh, age)。
+
+    fresh=False 时调用方**必须**把这个源当天的产出从「有效更新数」里剔除，
+    否则日志会虚报——这正是商务局那 7 个品种卡在 9-11 却天天报「更新 7 种」的原因。
+
+    日期解析不出来也按陈旧处理：宁可少报，也不虚报。
+    """
+    age = days_old(date_str)
+    if age is None:
+        print(f"  [WARNING] 数据源陈旧 | {label}：数据日期无法解析（{date_str!r}），本日不计入更新")
+        return False, None
+    if age > days:
+        print(f"  [WARNING] 数据源陈旧 | {label}：最新数据停在 {date_str}，"
+              f"已 {age} 天未更新（阈值 {days} 天），本日不计入更新")
+        return False, age
+    return True, age
 
 
 def build_cat_index(daily_cache, dates, name2cat):
@@ -656,6 +843,9 @@ def full_fetch():
     fgj_cat_of = {}          # 发改委原始品种名 -> 分类（用于算分类指数）
     if latest:
         print(f"  最新数据日: {latest}")
+        # 全量模式是「重建」，陈旧也照建（建出来就是官方最新值）；
+        # 但必须把状态喊出来，别让人以为数据是今天的。
+        stale_check(LOCAL_SOURCE_NAME, latest)
         # 真实 52 周历史：逐周拉取
         dates = weekly_dates(latest)
         print(f"  回溯 {len(dates)} 周历史（{dates[0]} ~ {dates[-1]}）...")
@@ -667,13 +857,17 @@ def full_fetch():
 
         today = daily_cache.get(latest, {})
 
-        # 真实商超价：选覆盖最多的 2 家超市
+        # 真实商超价：选覆盖最多的 2 家超市（顺带取平台的真实快照日）
         supers = fgj_supermarkets()
         store_prices = []
+        super_snapshot = None
         for p in supers[:2]:
-            prices = fgj_point_prices(p["id"], latest)
+            prices, snap = fgj_point_snapshot(p["id"], latest)
             store_prices.append({"name": p["name"], "prices": prices})
+            super_snapshot = snap or super_snapshot
             print(f"  商超监测点: {p['name']} → {len(prices)} 个品种有报价")
+        if super_snapshot and super_snapshot != latest:
+            print(f"  [note] 商超快照日 {super_snapshot}（接口忽略 date 参数，只能取当前快照）")
 
         # 组装品种
         order = []
@@ -744,6 +938,44 @@ def full_fetch():
             idx += 1
         print(f"  -> 发改委入库 {len(items)} 种（含真实历史与商超价）")
 
+        # 商超独有品种（目前只有猪五花肉）：商务局停更后，武汉唯一还能拿到的五花肉零售价。
+        # 它没有历史（接口忽略 date 参数，回溯不了），所以 history 只保留末位一个真实点。
+        extras = fgj_supermarket_extras(store_prices)
+        if extras:
+            fresh, _age = stale_check(SUPER_EXTRA.get("source") or "商超快照",
+                                      super_snapshot, SUPER_SNAPSHOT_STALE_DAYS)
+            if not fresh:
+                print(f"          商超快照补充 0 种（{len(extras)} 种候选被陈旧闸门拦下）")
+            else:
+                for ex in extras:
+                    h = blank_history()
+                    h[-1] = ex["price"]
+                    items.append({
+                        "id": idx,
+                        "name": ex["name"],
+                        "rawName": ex["name"],
+                        "pinyin": pinyin_initials(ex["name"]),
+                        "category": ex["category"],
+                        "unit": "500g",
+                        "currentPrice": ex["price"],
+                        "supermarketPrice": ex["price"],
+                        "storeName": ex["store"],
+                        "yearPosition": None,      # 只有一个快照点，不给百分位
+                        "history": h,
+                        "historyDates": dates_ending(WEEKS, super_snapshot or latest),
+                        "historyKind": "none",     # 无历史，前端按「无数据」处理，不给假曲线
+                        "historyReal": False,
+                        "prevObs": None,
+                        "prevObsAge": None,
+                        "obsWeeks": 1,
+                        "source": SUPER_EXTRA.get("source") or "商超快照",
+                        "updated": super_snapshot or latest,
+                    })
+                    used_names.add(ex["name"])
+                    idx += 1
+                print(f"  -> 商超快照补充 {len(extras)} 种（数据日 {super_snapshot}）："
+                      + "、".join(f"{e['name']} {e['price']}" for e in extras))
+
     # 用真实历史算出各分类的价格指数，供补充源推算走势
     cat_index = {}
     if daily_cache:
@@ -800,16 +1032,20 @@ def full_fetch():
         except Exception as e:
             print(f"  [error] {src['category']} 抓取失败: {e}")
 
-    # ===== 3. 商务局周报（补充肉禽蛋细类）=====
+    # ===== 3. 商务局周报（正文已图片化，解析器保留待其恢复）=====
     print("[抓取] 武汉市商务局 · 周报 ...")
-    try:
-        sw_urls = latest_article_urls(SW_SOURCE["column"], SW_SOURCE["take"], base=SW_BASE)
-        for u in sw_urls:
-            sw = parse_sw_weekly(u)
-            if not sw.get("肉禽蛋"):
-                continue
+    sw = sw_fetch(max_try=3)
+    if not sw["ok"]:
+        print(f"  [WARNING] 数据源陈旧 | 商务局·周报：{sw['reason']}")
+        print("          该源本日贡献 0 种（源端没有结构化数据，不是网络问题）")
+    else:
+        fresh, _age = stale_check("商务局·周报", sw["date"])
+        cand = len(sw["rows"].get("肉禽蛋") or []) + len(sw["rows"].get("水产") or [])
+        if not fresh:
+            print(f"          该源本日贡献 0 种（{cand} 种候选被陈旧闸门拦下）")
+        else:
             n = 0
-            for cat, rows in sw.items():
+            for cat, rows in sw["rows"].items():
                 for it in rows:
                     if it["name"] in used_names:
                         continue
@@ -837,18 +1073,14 @@ def full_fetch():
                         "prevObsAge": None,
                         "obsWeeks": 52,
                         "source": "商务局·周报",
-                        # 必须转成 ISO 日期：原来直接取 URL 的 8 位数字（"20260911"），
-                        # 会在前端显示成怪字符串，也让 weeks_since() 解析失败恒返回 0
-                        "updated": article_date(u) or latest
-                        or datetime.now().strftime("%Y-%m-%d"),
+                        # 一律 ISO 日期：数据日取标题里的区间右端，比 URL 发布日更准
+                        "updated": sw["date"] or latest,
                     })
                     used_names.add(it["name"])
                     idx += 1
                     n += 1
-            print(f"  采用 {u.split('/')[-1]}，补充 {n} 种")
-            break
-    except Exception as e:
-        print(f"  [error] 商务局周报失败: {e}")
+            print(f"  采用 {(sw.get('title') or sw['url'].split('/')[-1])[:26]}"
+                  f"（数据日 {sw['date']}），补充 {n} 种")
 
     # ===== 4. 参考源：全国口径（水果 + 全国均价基准）=====
     # 放在本地源之后：重名时以本地实测为准（本地零售口径更贴近菜篮子）
@@ -981,6 +1213,16 @@ def append_price(it, price, date_str, gap_weeks=1):
               f"（{price / old * 100:.0f}%），保留旧值")
         return False
 
+    # 不许把 updated 往回拨。
+    # 周末/节假日 fgj_latest_date() 会平滑回退到最近一个有数据的日期，
+    # 那个日期可能比 data.json 里已经存着的还早（比如数据集已到 10-26，
+    # 而这一轮只拿到 10-23）。此时追加会在序列尾部多出一个倒着的点，
+    # historyDates 也会整体倒退，图上就是一条倒退的时间轴。
+    prev_date = str(it.get("updated") or "")[:10]
+    if prev_date and date_str < prev_date:
+        print(f"  [skip] {it.get('name')} 数据日 {date_str} 早于现有 {prev_date}，不回溯覆盖")
+        return False
+
     if it.get("updated") == date_str:
         h[-1] = price                      # 同日重跑：覆盖，不追加
     else:
@@ -1066,6 +1308,8 @@ def daily_update():
 
     if today:
         print(f"  数据日: {latest}（{len(today)} 个品种）")
+        # 陈旧闸门：数据日照旧写（写的是官方最新值，不造假），但不计入当日有效更新数。
+        fgj_fresh, _age = stale_check(LOCAL_SOURCE_NAME, latest)
         miss = []
         for raw_name, row in today.items():
             if not row or not row.get("avg"):
@@ -1077,26 +1321,8 @@ def daily_update():
                 miss.append(raw_name)      # 新品种需要全量模式补历史
                 continue
             gap = weeks_since(it.get("updated") or "")
-            if append_price(it, row["avg"], latest, gap_weeks=max(1, gap)):
+            if append_price(it, row["avg"], latest, gap_weeks=max(1, gap)) and fgj_fresh:
                 updated += 1
-
-        # 真实商超价（2 个监测点，2 次请求）
-        # 与 full 模式同一口径：两店比价取最低，storeName 记该店，价格相同中百优先。
-        # 必须在本轮抓到的数据里重算，不能拿上一轮的旧商超价参与比较，
-        # 否则昨天那家店的最低价会挡住今天的真实报价。
-        try:
-            store_prices = []
-            for p in fgj_supermarkets()[:2]:
-                prices = fgj_point_prices(p["id"], latest)
-                store_prices.append({"name": p["name"], "prices": prices})
-                print(f"  商超 {p['name']}: {len(prices)} 个品种")
-            for raw_name, it in index_fgj.items():
-                sp, store = pick_cheapest_supermarket(store_prices, raw_name)
-                if sp is not None:
-                    it["supermarketPrice"] = sp
-                    it["storeName"] = store
-        except Exception as e:
-            print(f"  [error] 商超价: {type(e).__name__}")
 
         if miss:
             print(f"  [提示] {len(miss)} 个新品种未入库（如 {', '.join(miss[:3])}），需 --mode=full 补历史")
@@ -1109,50 +1335,101 @@ def daily_update():
     if not latest:
         latest = datetime.now().strftime("%Y-%m-%d")
 
+    # -------- 1b. 商超快照（与发改委每日均价表相互独立）--------
+    # 与 full 模式同一口径：两店比价取最低，storeName 记该店，价格相同中百优先。
+    # 必须在本轮抓到的数据里重算，不能拿上一轮的旧商超价参与比较，
+    # 否则昨天那家店的最低价会挡住今天的真实报价。
+    try:
+        store_prices = []
+        super_snapshot = None
+        for p in fgj_supermarkets()[:2]:
+            prices, snap = fgj_point_snapshot(p["id"], latest)
+            store_prices.append({"name": p["name"], "prices": prices})
+            super_snapshot = snap or super_snapshot
+            print(f"  商超 {p['name']}: {len(prices)} 个品种")
+        if super_snapshot and super_snapshot != latest:
+            print(f"  [note] 商超快照日 {super_snapshot}（接口忽略 date 参数，只能取当前快照）")
+
+        for raw_name, it in index_fgj.items():
+            sp, store = pick_cheapest_supermarket(store_prices, raw_name)
+            if sp is not None:
+                it["supermarketPrice"] = sp
+                it["storeName"] = store
+
+        # 商超独有品种（猪五花肉）走独立陈旧闸门：它是周更快照，不能按日更的 3 天算
+        extras = fgj_supermarket_extras(store_prices)
+        if extras:
+            fresh, _age = stale_check(SUPER_EXTRA.get("source") or "商超快照",
+                                      super_snapshot, SUPER_SNAPSHOT_STALE_DAYS)
+            n = 0
+            if fresh:
+                for ex in extras:
+                    it = index_supp.get(ex["name"])
+                    if not it:
+                        print(f"  [提示] 商超快照有新品种「{ex['name']}」，需 --mode=full 建条目")
+                        continue
+                    gap = weeks_since(it.get("updated") or "")
+                    if append_price(it, ex["price"], super_snapshot, gap_weeks=max(1, gap)):
+                        it["supermarketPrice"] = ex["price"]
+                        it["storeName"] = ex["store"]
+                        n += 1
+                updated += n
+            print(f"  商超快照补充 {n} 种（{len(extras)} 种候选，数据日 {super_snapshot}）")
+    except Exception as e:
+        print(f"  [error] 商超价: {type(e).__name__}")
+
     # -------- 2. 农业局批发价（3 个栏目 × 最新 1 篇）--------
+    # 数据日必须用文章自己的日期（形如 t20261026_...），不能借用发改委的 latest：
+    # 两个源更新节奏不同，借用等于把批发价改标成零售价那天，陈旧检测也会失灵。
     print("[抓取] 农业农村局 · 今日批发价 ...")
     for src in NYNCJ_SOURCES:
         try:
             urls = latest_article_urls(src["column"], 1)
             if not urls:
+                print(f"  [WARNING] 数据源陈旧 | 农业农村局·{src['category']}：栏目里没有文章")
                 continue
-            arts = [parse_price_table(u) for u in urls]
-            n = 0
-            for it_new in merge_markets(arts):
-                it = index_supp.get(it_new["name"])
-                if not it:
-                    continue
-                gap = weeks_since(it.get("updated") or "")
-                if append_price(it, it_new["price"], latest, gap_weeks=max(1, gap)):
-                    n += 1
-            updated += n
-            print(f"  {src['category']}: 更新 {n} 种")
+            adate = article_date(urls[0]) or latest
+            cand = merge_markets([parse_price_table(u) for u in urls])
+            fresh, _age = stale_check(f"农业农村局·{src['category']}", adate)
+            if fresh:
+                n = 0
+                for it_new in cand:
+                    it = index_supp.get(it_new["name"])
+                    if not it:
+                        continue
+                    gap = weeks_since(it.get("updated") or "")
+                    if append_price(it, it_new["price"], adate, gap_weeks=max(1, gap)):
+                        n += 1
+                updated += n
+                print(f"  {src['category']}: 更新 {n} 种（数据日 {adate}）")
+            else:
+                print(f"  {src['category']}: 更新 0 种（{len(cand)} 种候选被陈旧闸门拦下）")
         except Exception as e:
             print(f"  [error] {src['category']}: {type(e).__name__}")
 
-    # -------- 3. 商务局周报（往前找最多 3 篇有数据的，最新几期常是空正文）--------
+    # -------- 3. 商务局周报（正文已图片化：能解析才更新，解析不了就明说）--------
     print("[抓取] 商务局 · 最新周报 ...")
-    try:
-        for u in latest_article_urls(SW_SOURCE["column"], 6, base=SW_BASE):
-            sw = parse_sw_weekly(u)
-            if not sw.get("肉禽蛋"):
-                continue
+    sw = sw_fetch(max_try=3)
+    if not sw["ok"]:
+        print(f"  [WARNING] 数据源陈旧 | 商务局·周报：{sw['reason']}")
+        print("          该源本日贡献 0 种（源端没有结构化数据，不是网络问题）")
+    else:
+        fresh, _age = stale_check("商务局·周报", sw["date"])
+        cand = sum(len(v) for v in sw["rows"].values())
+        if fresh:
             n = 0
-            wdate = u.split("/")[-1][1:9]
-            wdate = f"{wdate[:4]}-{wdate[4:6]}-{wdate[6:8]}" if len(wdate) == 8 else latest
-            for cat, rows in sw.items():
+            for cat, rows in sw["rows"].items():
                 for it_new in rows:
                     it = index_supp.get(it_new["name"])
                     if not it:
                         continue
                     gap = weeks_since(it.get("updated") or "")
-                    if append_price(it, it_new["price"], wdate, gap_weeks=max(1, gap)):
+                    if append_price(it, it_new["price"], sw["date"], gap_weeks=max(1, gap)):
                         n += 1
             updated += n
-            print(f"  周报更新 {n} 种")
-            break
-    except Exception as e:
-        print(f"  [error] 周报: {type(e).__name__}")
+            print(f"  周报更新 {n} 种（数据日 {sw['date']}）")
+        else:
+            print(f"  周报更新 0 种（{cand} 种候选被陈旧闸门拦下）")
 
     # -------- 4. 参考源：全国口径（周报/日报 + 新发地）--------
     try:

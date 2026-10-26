@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="initial-scale=1, user-scalable=0, minimal-ui">
+<meta http-equiv="X-UA-Compatible" content="IE=8;IE=9;IE=10"/>
+<META NAME="Keywords" CONTENT="商务预报, 农产品,生产资料,消费品,指数,订单,库存,农产品价格,生产资料价格,耐用消费品订单,耐用消费品库存,生产资料订单,生产资料库存,销售额,业态,商品销售额,销售指数,订单指数,库存指数,预测预警,农产品对接,市场监测">
+<META NAME="Description" CONTENT="商务预报网是商务部公共信息服务平台,以城乡市场监测统计信息服务体系数万家企业直报数据为信息来源,定期发布18大类近200种商品的期现货价格,重要商品的订单、库存数量与分析,热点品种的预测预警,以及10大类市场指数指标数据。同时商务预报网还提供农产品行情分析、农产品出口指南、消费安全等资讯信息及农产品产销对接功能.">
+<title>商务预报</title>
+<script type="text/javascript" src="/cif/res2018/js/jquery-1.9.1.min.js"></script>
+<script type="text/javascript" src="/cif/res2018/js/bootstrap.min.js" ></script>
+<link href="/cif/res2018/css/bootstrap-combined.min.css" rel="stylesheet">
+<link href="/cif/res2018/css/base.css" rel="stylesheet">
+<style type="text/css">
+body{padding:0px;margin: 0px;}
+p{line-height:20px;}
+a{text-decoration: none;color: #000000;font-size: 14px;}
+.yclb ul li{margin:5px;padding-top:1px;height:30px;text-align:left;font-size:15px;}
+.font12px266dbb {color: rgb(38, 109, 187);font-size: 13px;font-family: 微软雅黑;}
+.sskuang {background-image: url(/cif/res2018/images/sousuosy.jpg);}
+.shichangshujutitle {width: 100%;float: left;height: 34px;line-height: 34px;font-size:15px;font-weight:bold;
+margin-top:20px;margin-bottom:10px;padding-left:10px;background-image: url(/cif/res2018/images/secondtml1.jpg);
+background-repeat: repeat-x;
+}
+#logo { height:120px;border:0px solid #000;background-image: url(/cif/res2018/images/logo.jpg); }
+.secondlist4 ul li { height: 25px;line-height: 25px;overflow: hidden;text-overflow: ellipsis;
+width: 100%;white-space: nowrap;margin-bottom: 0px;list-style-type: none;
+padding-left: 8px;vertical-align: middle;background-image: url(/cif/res2018/images/hndot2.jpg);
+background-repeat: no-repeat;list-style-image: none;
+}
+.secondlist4 ul li a{color:#000;}
+.listnewsdate {width: 120px;float: right;margin-right:10px;text-align: right;}
+.bbtitle{ line-height:38px; height:38px;vertical-align: middle; margin:5px 0 5px 0;}
+.bblaiyuan{ line-height:28px; height:28px;}
+.bbfeibie{ line-height:25px; height:25px; margin-top:3px;}
+.flb1{ width:100px; float:left;}
+.flb2{ width:480px; float:left;}
+.flb3{ width:120px; float:right; text-align:right;}
+.fontbb1{ color:#000000;font-size:17px; font-weight:bold;font-family:'Microsoft Yahei';}
+.fontbb1 a{ color:#000000;font-size:17px;font-weight:bold;font-family:'Microsoft Yahei';}
+.fontbb2{ color:#636363;font-size:12px;font-family:'Microsoft Yahei';}
+.fontbb2 a{ color:#636363;font-size:12px;font-family:'Microsoft Yahei';}
+.fontbb3{ color:#636363;font-size:14px;font-family:'Microsoft Yahei';}
+.fontbb3 a{ color:#636363;font-size:14px;font-family:'Microsoft Yahei';}
+.right0{height:45px;}
+.newsztlist{ width:100%; float:left;}
+.morejz{ width:100%; float:left; text-align:center; margin-top:20px;}
+.newsnrgb{border-bottom: 1px dashed #8d8e90; padding-bottom:10px;}
+</style>
+</head>
+<body>
+<div id="container-fluid">
+<div class="g-doc">
+<link rel="shortcut icon" type="image/x-icon" href="/cif/res2021/favicon.ico" />
+<link rel="stylesheet" href="/cif/res2021/css/edi/edi.reset.css" />
+<link rel="stylesheet" href="/cif/res2021/fonts/iconfont.css" />
+<link rel="stylesheet" href="/cif/res2021/css/edi/edi.animate.min.css" />
+<link rel="stylesheet" href="/cif/res2021/css/edi/edi.core.css" />
+<link rel="stylesheet" href="/cif/res2021/css/edi/edi.function.css" />
+<link rel="stylesheet" href="/cif/res2021/css/edi/outSideChain.min.css" />
+<link rel="stylesheet" href="/cif/res2021/css/app/app.css">
+<link rel="stylesheet" href="/cif/res2021/css/edi/outSideChain.min.css" />
+<script src="/cif/res2021/js/edi/core/edi.jq.min.js"></script>
+<script src="/cif/res2021/js/edi/core/edi.slide.min.js"></script>
+
+
+<!-- Header Start (ftl) -->
+<div class="g-hd">
+	<!-- Header-Top Start -->
+	<div class="m-hd">
+		<div class="f-warp">
+			<div class="u-logo-box">
+				<a href="http://www.mofcom.gov.cn"><img src="/cif/res2021/img/logo.png" alt="中华人民共和国商务部"></a>
+			</div>
+			<div class="u-sch-box f-flex-sb">
+				<div class="u-logo-box1">
+					<a href="/cif/html/">
+						<img src="/cif/res2021/img/logo1.png" alt="商务预报">
+					</a>
+				</div>
+				<div class="u-sch-fm f-flex-sb">
+					
+					<div class="u-ipt-box">
+						<form id="search_form" action="/cif/toSearch.fhtml" method="post" target="_blank">
+							<input class="u-sch-ipt" type="text" id="keyword" name="keyword" placeholder="关键字搜索">
+							<a class="u-sch-btn" href="javascript:;" id="searchBtn"><i class="iconfont icon-sousuo"></i></a>
+						</form>
+					</div>
+
+					<!--<a class="u-login-btn" href="/cif/back/login.jhtml"><i class="iconfont icon-denglu"></i><br>登录</a>-->
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- Header-Top End -->
+	<!-- Header-Menu Start -->
+	<div class="m-top-menu-box">
+		<div class="m-top-menu j-top-menu">
+			<div class="f-warp u-top-menu f-flex-sb j-top-menu-hd">
+				<a href="/cif/listIndex.fhtml?nodeid=13"><i class="iconfont icon-womengengbianjie"></i>市场风向</a> 
+				<a href="/cif/html/dataCenter2021/index.html?jgnfcprd"><i class="iconfont icon-shuju"></i>数据中心</a> 
+				<a href="/cif/html/indexCenter2021/index.html?35249"><i class="iconfont icon-shuju1"></i>指数中心</a>
+				<a href="/cif/reportHome.fhtml"><i class="iconfont icon-baogao"></i>报告中心</a>
+				<a href="/cif/html/sites/index.html"><i class="iconfont icon-jiegou-copy"></i>地方子站</a> 
+				<a href="/cif/html/about/index.html"><i class="iconfont icon-women"></i>关于我们</a>
+			</div>
+		</div>
+		<div class="f-warp u-subset-menu j-top-menu-bd">
+			<div class="u-sub-menu z-crt">
+				<a href="/cif/listIndex.fhtml?nodeid=13">一周热点</a> 
+				<a href="/cif/listIndex.fhtml?nodeid=62">市场监测</a>
+				<a href="/cif/tushuoListIndex.fhtml?nodeId=15">图说市场</a>
+				<a href="/cif/listIndex.fhtml?nodeid=10163">农副产品动态</a> 
+				<a href="/cif/listIndex.fhtml?nodeid=10164">生产资料动态</a>
+				<a href="/cif/listIndex.fhtml?nodeid=10163_10164">全国监测</a>
+				<a href="/cif/listIndex.fhtml?nodeid=10400_10402_10360">地方监测</a>
+				<a href="/cif/listIndex.fhtml?nodeid=10162">消费市场</a>
+				<a href="/cif/listIndex.fhtml?nodeid=2562">国际市场</a>
+			</div>
+			<div class="u-sub-menu">
+				<a href="/cif/html/dataCenter2021/index.html?jgnfcprd" target="_blank"><span style="font-size: 15px; font-weight: bold; color: #d20202;">商品市场：</span></a>
+				<a href="/cif/html/dataCenter2021/index.html?jgnfcprd" target="_blank">价格</a>
+				<a href="/cif/html/dataCenter2021/index.html?scsjnfcp" target="_blank">生产</a>
+				<a href="/cif/html/dataCenter2021/index.html?qcxfqk" target="_blank">销售</a>
+				<a href="/cif/html/dataCenter2021/index.html?shxfplsze" target="_blank"><span style="font-size: 15px; font-weight: bold; color: #d20202;">消费流通</span></a>
+				<a href="/cif/html/dataCenter2021/index.html?gnsczz"  target="_blank"><span style="font-size: 15px; font-weight: bold; color: #d20202;">宏观经济</span></a>
+				<!--<a href="/cif/html/screen/ncpScreen.html"  target="_blank"><span style="font-size: 15px; font-weight: bold; color: #d20202;">数据大屏</span></a>-->
+			</div>
+			<div class="u-sub-menu">
+				<a href="/cif/html/indexCenter2021/index.html?35249" target="_blank">食用农产品</a>
+				<a href="/cif/html/indexCenter2021/index.html?35251" target="_blank">生产资料</a>
+				<a href="/cif/html/indexCenter2021/index.html?35358" target="_blank">大宗商品</a>
+				<a href="/cif/html/indexCenter2021/index.html?10300" target="_blank">义乌小商品</a>
+				<a href="/cif/html/indexCenter2021/index.html?10301" target="_blank">柯桥纺织</a>
+				<a href="/cif/html/indexCenter2021/index.html?35829" target="_blank">寿光蔬菜</a>
+				<a href="/cif/html/indexCenter2021/index.html?35110" target="_blank">常熟男装</a>
+				<a href="/cif/html/indexCenter2021/index.html?35849" target="_blank">叠石桥家纺</a>
+				<a href="/cif/html/indexCenter2021/index.html?35831" target="_blank">盛泽丝绸化纤</a>
+				<a href="/cif/html/indexCenter2021/index.html?35409" target="_blank">永康五金</a>	
+			</div>
+			<div class="u-sub-menu">
+				<a href="/cif/reportHome.fhtml">重要商品</a>
+				<a href="/cif/reportHome.fhtml?35451">消费市场</a>
+				<a href="/cif/reportHome.fhtml?35452">商贸流通</a>
+				<a href="/cif/reportHome.fhtml?35453">宏观综合</a>
+			</div>
+			<div class="u-sub-menu"></div>
+			<div class="u-sub-menu"></div>
+		</div>
+	</div>
+	<!-- Header-Menu End -->
+</div>
+<!-- Header End -->
+<div class="row-fluid" class="g-doc" style="margin-bottom:10px;">
+<div class="span12">
+<div class="row-fluid"  style="width: 1200px;margin: auto;">
+<div class="span12">
+<!-- CurrentLocation Start -->
+<div class="row-fluid" style="border-bottom: 1px dashed #dfdfdf;">
+<div class="newskuaixun font12px266dbb">
+<span class="font12px000">当前位置</span> > <a href="/cif/html/">首页</a> > 地方监测
+</div>
+<div class="span2" style="float:right;text-align:right;paddin-left:20px; margin-top:5px;">
+<a href="http://cif.mofcom.gov.cn/cif/html/"><img src="/cif/res2018/images/fanhuisy2014.jpg" border="0"></a>
+</div>
+</div>
+<!-- CurrentLocation End -->
+
+<!-- Content Start -->
+<div class="row-fluid" >
+
+<!-- Left-Part Start  -->
+<div class="span8 list">
+<div class="row-fluid shichangshujutitle" style="">地方监测</div>
+<div id="list_area">
+<!--新闻列表单条开始 -->
+<div class="row-fluid newsztlist" >
+<div class="newsnrgb">
+<div class="bbtitle fontbb1">
+<a href="/cif/html//inland_month_report//2026/10/1792981794369.html" target="_blank" class="title_style" onclick="add_read_count(4,790,804);" title="2026年9月份江西省鹰潭市生活必需品价格以涨为主">2026年9月份江西省鹰潭市生活必需品价格以涨为主</a>
+</div>
+
+<div class="right0 fontbb3 dot_style">摘要：据监测，9月份鹰潭市生活必需品市场供应整体充足，价格以涨为主。</div>
+
+<div class="bbfeibie fontbb2">
+<span class="flb2">[江西] [农副产品]</span>
+<span class="flb3">2026-10-26</span>
+</div>
+</div>
+</div>
+<div class="row-fluid newsztlist" >
+<div class="newsnrgb">
+<div class="bbtitle fontbb1">
+<a href="/cif/html//market_scanner/2026/10/1792983073344.html" target="_blank" class="title_style" onclick="add_read_count(4,790,805);" title="内蒙古自治区二连浩特市2026年10月中旬生活必需品市场运行简析">内蒙古自治区二连浩特市2026年10月中旬生活必需品市场运行简析</a>
+</div>
+
+<div class="right0 fontbb3 dot_style">摘要：据商务部生活必需品监测系统数据显示，10月中旬二连浩特市生活必需品市场货源充足，运行稳定，重点监测的8大类生活必需品样本价格环比呈现“5平1涨2降”态势。</div>
+
+<div class="bbfeibie fontbb2">
+<span class="flb2">[内蒙古] [农副产品]</span>
+<span class="flb3">2026-10-26</span>
+</div>
+</div>
+</div>
+<div class="row-fluid newsztlist" >
+<div class="newsnrgb">
+<div class="bbtitle fontbb1">
+<a href="/cif/html//market_scanner/2026/10/1792983208453.html" target="_blank" class="title_style" onclick="add_read_count(4,790,807);" title="湖南省永州市2026年第42周（10月12日-18日）生活必需品市场运行分析">湖南省永州市2026年第42周（10月12日-18日）生活必需品市场运行分析</a>
+</div>
+
+<div class="right0 fontbb3 dot_style">摘要：据湖南省永州市2026年第42周（10月12日-18日）生活必需品市场监测数据显示，全市生活必需品市场各类货源供应充足、需求平稳，运行态势良好，重点监测的11大类生活必需品价格环比前一周（以下皆同）呈“3跌6平2涨”态势。</div>
+
+<div class="bbfeibie fontbb2">
+<span class="flb2">[湖南] [农副产品]</span>
+<span class="flb3">2026-10-26</span>
+</div>
+</div>
+</div>
+<div class="row-fluid newsztlist" >
+<div class="newsnrgb">
+<div class="bbtitle fontbb1">
+<a href="/cif/html//market_scanner/2026/10/1792983251077.html" target="_blank" class="title_style" onclick="add_read_count(4,790,808);" title="浙江省2026年第42周生活必需品市场简析">浙江省2026年第42周生活必需品市场简析</a>
+</div>
+
+<div class="right0 fontbb3 dot_style">摘要：据浙江省生活必需品市场监测系统监测，本周（2026年10月12日—10月18日），浙江省生活必需品市场供应总体充足，菜肉蛋价格小幅下行。</div>
+
+<div class="bbfeibie fontbb2">
+<span class="flb2">[浙江] [农副产品]</span>
+<span class="flb3">2026-10-26</span>
+</div>
+</div>
+</div>
+<div class="row-fluid newsztlist" >
+<div class="newsnrgb">
+<div class="bbtitle fontbb1">
+<a href="/cif/html//market_scanner/2026/10/1792985259142.html" target="_blank" class="title_style" onclick="add_read_count(4,790,809);" title="浙江省2026年第41周生活必需品市场简析">浙江省2026年第41周生活必需品市场简析</a>
+</div>
+
+<div class="right0 fontbb3 dot_style">摘要：据浙江省生活必需品市场监测系统监测，本周（2026年10月5日—10月11日），节后市场需求回落，除水产品以外，多品类价格止涨回落。</div>
+
+<div class="bbfeibie fontbb2">
+<span class="flb2">[浙江] [农副产品]</span>
+<span class="flb3">2026-10-26</span>
+</div>
+</div>
+</div>
+<div class="row-fluid newsztlist" >
+<div class="newsnrgb">
+<div class="bbtitle fontbb1">
+<a href="/cif/html//market_scanner/2026/10/1792992345250.html" target="_blank" class="title_style" onclick="add_read_count(4,790,817);" title="湖南省长沙市2026年第42周（10月12日—18日）生活必需品市场运行情况分析">湖南省长沙市2026年第42周（10月12日—18日）生活必需品市场运行情况分析</a>
+</div>
+
+<div class="right0 fontbb3 dot_style">摘要：2026年第42周（10月12日—18日），全市生活必需品市场整体供需平衡，价格运行总体平稳。</div>
+
+<div class="bbfeibie fontbb2">
+<span class="flb2">[湖南] [农副产品]</span>
+<span class="flb3">2026-10-26</span>
+</div>
+</div>
+</div>
+</div>
+<input type="hidden" id="pageNo_10400_10402_10360" value="1"/>
+<div class="morejz">
+<img src="/cif/res/image/report_more.jpg" style="cursor:pointer" width="385" height="37" onclick="load_more('10400_10402_10360');"/>
+</div>
+</div>
+<!-- Left-Part End  -->
+
+<!-- Right-Part Start -->
+<div class="span4" >
+<div class="row-fluid" style="margin-left:20px;margin-top:10px;">
+<h4>市场风向</h4>
+<div class="row-fluid" style="height:3px;background:#E5EAEE; border:0px solid #000;">
+<div class="span4"  style="height:3px;min-height: 3px;">
+<div class="row-fluid" style="height:3px;background:#0D6DB7; border:0px solid #000;"></div>
+</div>
+<div class="span8" style="height:3px;min-height: 3px;"></div>
+</div>
+
+<!-- Right-市场风向 Start -->
+<div class="row-fluid"  >
+<div class="span6 yclb" style="padding:10px;">
+<ul class="unstyled">
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=13" target="_blank" border=0>
+<img src="/cif/res2018/images/111.png">&nbsp;<span style="vertical-align: middle;">一周热点</span>
+</a>
+</li>
+<li>
+<a href="/cif/tushuoListIndex.fhtml?nodeId=15" target="_blank" border=0>
+<img src="/cif/res2018/images/215.png">&nbsp;<span style="vertical-align: middle;">图说市场</span>
+</a>
+</li>
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=10164" target="_blank" border=0 >
+<img src="/cif/res2018/images/212.png">&nbsp;<span style="vertical-align: middle;">生产资料动态</span>
+</a>
+</li>
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=10163_10164" target="_blank" border=0 >
+<img src="/cif/res2018/images/212.png">&nbsp;<span style="vertical-align: middle;">全国监测</span>
+</a>
+</li>
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=10162" target="_blank" border=0 >
+<img src="/cif/res2018/images/113.png">&nbsp;<span style="vertical-align: middle;">消费市场</span>
+</a>
+</li>
+</ul>
+</div>
+<div class="span6 yclb" style="padding:10px;">
+<ul class="unstyled">
+<li >
+<a href="/cif/listIndex.fhtml?nodeid=62"  target="_blank" border=0>
+<img src="/cif/res2018/images/211.png">&nbsp;<span style="vertical-align: middle;">市场监测</span>
+</a>
+</li>
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=10163" target="_blank" border=0>
+<img src="/cif/res2018/images/112.png" >&nbsp;<span style="vertical-align: middle;">农副产品动态</span>
+</a>
+</li>
+
+<!--
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=10303" target="_blank" border=0 >
+<img src="/cif/res2018/images/213.png">&nbsp;<span style="vertical-align: middle;">茧丝绸动态</span>
+</a>
+</li>
+-->
+
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=10400_10402_10360" target="_blank" border=0>
+<img src="/cif/res2018/images/215.png">&nbsp;<span style="vertical-align: middle;">地方监测</span>
+</a>
+</li>
+<li>
+<a href="/cif/listIndex.fhtml?nodeid=2562" target="_blank" border=0>
+<img src="/cif/res2018/images/116.png">&nbsp;<span style="vertical-align: middle;">国际市场</span>
+</a>
+</li>
+</ul>
+</div>
+</div>
+<!-- Right-市场风向 End -->
+
+<!-- Right-一周新闻排行 Start -->
+<div class="row-fluid" >
+<h4>一周新闻排行</h4>
+<div class="row-fluid" style="height:3px;background:#E5EAEE; border:0px solid #000;">
+<div class="span4"  style="height:3px;min-height: 3px;">
+<div class="row-fluid" style="height:3px;background:#0D6DB7; border:0px solid #000;"></div>
+</div>
+<div class="span8"  style="height:3px;min-height: 3px;"></div>
+</div>
+<div class="row-fluid" >
+<div class="span12 secondlist4" style="padding-top:10px;">
+<ul id="top_ten_content"></ul>
+</div>
+</div>
+</div>
+<!-- Right-一周新闻排行 End -->
+</div>
+</div>
+<!-- Right-Part End -->
+</div>
+<!-- Content End -->
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Start -->
+<div class="g-ft mar0">
+	<ul class="m-cprt f-flex-c f-warp">
+		<li>
+			<p class="p1">主办单位：中华人民共和国商务部</p>
+			<p class="p1" style="margin-top:8px;">网站标识码：bm22000001</p>
+			<p class="p1" style="margin-top:8px;">
+				<a href="https://beian.miit.gov.cn/" target="_blank" style="color:#000000;">ICP备案编号：京ICP备05004093号-1</a>
+			</p>
+			<p class="p1" style="margin-top:8px;">
+				<a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=11040102700091">
+					<img class="f-mr5" src="/cif/res2021/img/icons/img_jh_01.png" >京公网安备11040102700091号
+				</a>
+			</p>
+		</li>
+		<li>
+			<p class="p1">网站管理：商务部市场运行和消费促进司</p>
+			<p class="p1 f-mt18">技术支持：中国国际电子商务中心</p>
+			<p class="p1 f-mt18">技术支持电话 : 010-67801946/0173/0089</p>
+		</li>
+		<li>
+		<div class="u-logo1 f-ib">
+		<script id="_jiucuo_" sitecode='bm22000001' src='https://pucha.kaipuyun.cn/exposure/jiucuo.js' ></script>
+		</div>
+		<div class="u-logo1 f-ib f-ml20">
+			<script type="text/javascript">
+				document.write(unescape("%3Cspan id='_ideConac' %3E%3C/span%3E%3Cscript src='https://dcs.conac.cn/js/33/000/0000/40672568/CA330000000406725680001.js' type='text/javascript'%3E%3C/script%3E"));
+			</script>
+		</div>
+		</li>
+	</ul>
+</div>
+<!-- Footer End -->
+<script src="/cif/res2021/js/app/outSideChain.min.js"></script>
+<script src="/cif/res2021/js/edi/core/edi.wow.js"></script>
+<script src="/cif/res2021/js/app/app.js"></script>
+<script type="text/javascript">
+$(function(){
+$("#searchBtn").click(function(){
+$("#search_form").attr("action","/cif/toSearch.fhtml");
+$("#search_form").submit();
+});
+});
+</script>
+</div>
+</body>
+<script language="JavaScript">
+jQuery(document).ready(function(){
+dotdot();
+title_dot();
+});
+
+
+jQuery("#nav li").mouseover(function(){
+jQuery("#nav .active").removeClass("active");
+jQuery(".show").attr("class","hiden");
+jQuery(this).addClass("active");
+jQuery("#"+this.value).attr("class","show");
+});
+
+jQuery.ajax({
+type: "POST",
+url: "/cif/top10ContentForWeek.fhtml",
+data: {random:Math.random()},
+success: function(msg){
+var json =  msg ;
+var datas = json.datas;
+var top_content = "";
+for(var i=0; i<datas.length; i++){
+var title = json.datas[i].title;
+var relPath = "http://"+window.location.host+"/cif/html"+json.datas[i].relpath;
+var li = "<li style='padding-top:1px;line-height:25px;'><a href='"+relPath+"' target='_blank'>"+title+"</a></li>";
+top_content += li;
+}
+jQuery('#top_ten_content').html(top_content);
+}
+});
+
+//标题部分多出文字使用"……”替换
+function title_dot(){
+$(".title_style").each(function(){
+var len = $(this).text().length;
+if(len>45){
+var str="";
+str = $(this).text().substring(0,45)+"....";
+$(this).html(str);
+}
+});
+}
+
+//多出文字部分使用"……”替换
+function dotdot(){
+$(".dot_style").each(function(){
+var len = $(this).text().length;
+if(len>105){
+var str="";
+str = $(this).text().substring(0,105)+"....";
+$(this).html(str);
+}
+});
+}
+
+//访问量计数
+function add_read_count(id){
+jQuery.ajax({
+type: "POST",
+url: "/cif/addReportReadcount.fhtml",
+data: {"contentId":id, random:Math.random()},
+dataType: "json",
+success: function(msg){
+var json = eval('(' + msg + ')');
+if(json.result!=1){
+alert("计数失败！");
+}
+}
+});
+}
+
+//加载更多
+function load_more(nid){
+var currPN = $("#pageNo_"+nid).val();
+var nextPN = Number(currPN)+1;
+jQuery.ajax({
+type: "POST",
+url: "/cif/moreReport.fhtml",
+data: {"nodeId":nid,"pageNo":nextPN,"pageSize":6, random:Math.random()},
+dataType: "json",
+success: function(msg){
+var result = msg.result;
+var json = "";
+for(var i=0; i<result.length; i++){
+json += "<div class='row-fluid newsztlist'>\n";
+json += "<div class='newsnrgb'>\n";
+json += "<div class='bbtitle fontbb1'>\n";
+if(result[i].attach){
+json += "<a href='/cif"+result[i].attach+"' target='_blank' class='title_style' onclick='add_read_count("+result[i].id+");' title='"+result[i].title+"'>"+result[i].title+"</a></div>\n";
+}else{
+json += "<a href='/cif/html/"+result[i].relpath+"' target='_blank' class='title_style' onclick='add_read_count("+result[i].id+");' title='"+result[i].title+"'>"+result[i].title+"</a></div>\n";
+}
+if(nid!=35343 && nid!=35350 && nid!=35355){
+json += "<div class='right0 fontbb3 dot_style'>摘要："+result[i].summary+"</div>\n";
+}
+json += "<div class='bbfeibie fontbb2'>\n";
+if(nid!=35469 && nid!=62 && nid!=2562){
+json += "<span class='flb2'>"+result[i].keyword+"</span>\n";
+}
+json += "<span class='flb3'>"+result[i].publishDate+"</span>\n";
+json += "</div>\n";
+}
+$("#list_area").append(json);
+$("#pageNo_"+nid).val(nextPN);
+dotdot();
+title_dot();
+}
+});
+}
+</script>
+</html>

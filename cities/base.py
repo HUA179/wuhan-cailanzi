@@ -48,6 +48,7 @@ def make_city(**kw):
         "sw_base": "",
         "nyncj_sources": [],        # [{"column":..., "category":..., "take":...}]
         "sw_source": None,          # {"column":..., "take":...}
+        "super_extra": {},          # {"source": 来源名, "items": {品种: 分类}}
 
         # 品种 → 分类 / 展示名归一
         "category_map": {},         # {分类: [原始品种名...]}

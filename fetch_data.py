@@ -492,7 +492,8 @@ def sw_fetch(max_try=3):
     并在每一篇上都留下失败原因。
     """
     if not SW_SOURCE:
-        return {"ok": False, "date": None, "rows": {}, "reason": "未配置商务局栏目",
+        # 没配商务局的城市（换城市时常见）不算异常，reason 留空让调用方静默跳过
+        return {"ok": False, "date": None, "rows": {}, "reason": "",
                 "url": "", "title": ""}
     try:
         arts = sw_articles(max(max_try, 1))

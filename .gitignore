@@ -3,3 +3,6 @@ tools/tailwind/node_modules/
 .workbuddy/
 99-归档-*/
 .venv/
+__pycache__/
+*.pyc
+_probe/

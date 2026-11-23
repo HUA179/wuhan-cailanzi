@@ -8,3 +8,5 @@ __pycache__/
 _probe/
 _online.json
 _sim/
+scf_pack/
+dist_scf/

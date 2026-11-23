@@ -6,3 +6,5 @@ tools/tailwind/node_modules/
 __pycache__/
 *.pyc
 _probe/
+_online.json
+_sim/
